@@ -1,9 +1,10 @@
 # Latency Graph for ClashX Meta
 
-![GitHub release](https://img.shields.io/github/v/release/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
-![License](https://img.shields.io/github/license/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
-![GitHub Repo stars](https://img.shields.io/github/stars/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=social)
 ![macOS](https://img.shields.io/badge/macOS-13%2B-blue)
+![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
+![GitHub release](https://img.shields.io/github/v/release/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
+![GitHub Downloads](https://img.shields.io/github/downloads/HanBangyuan8/Latency-Graph-for-ClashX-Meta/total)
+![GitHub Repo stars](https://img.shields.io/github/stars/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=social)
 
 A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latency.
 

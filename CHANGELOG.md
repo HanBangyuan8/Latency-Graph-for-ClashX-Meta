@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.1 - 2026-04-14
+
+Patch release.
+
+- Fixed English UI locale handling for date and time formatting.
+- Fixed language selector labels in English and Traditional Chinese modes.
+- Fixed localized display for common cancellation errors.
+
 ## v1.0.0 - 2026-04-13
 
 Initial public release.

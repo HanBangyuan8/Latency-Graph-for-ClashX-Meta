@@ -88,6 +88,33 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case .traditionalChinese: "繁体中文"
         }
     }
+
+    var localeIdentifier: String {
+        switch self {
+        case .english: "en"
+        case .simplifiedChinese: "zh-Hans"
+        case .traditionalChinese: "zh-Hant"
+        }
+    }
+
+    func title(for language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            switch self {
+            case .english: "English"
+            case .simplifiedChinese: "Simplified Chinese"
+            case .traditionalChinese: "Traditional Chinese"
+            }
+        case .simplifiedChinese:
+            title
+        case .traditionalChinese:
+            switch self {
+            case .english: "English"
+            case .simplifiedChinese: "簡體中文"
+            case .traditionalChinese: "繁體中文"
+            }
+        }
+    }
 }
 
 struct AccentColorOption: Identifiable, Hashable {
@@ -156,7 +183,8 @@ enum L10n {
         "探测目标": "探測目標", "数据点间隔": "資料點間隔", "测速超时": "測速逾時", "每点探测次数": "每點探測次數",
         "次，取中位数": "次，取中位數", "点击“刷新代理列表”后选择节点。": "點擊「重新整理代理列表」後選擇節點。",
         "所有选择节点": "所有選擇節點", "等待数据": "等待資料", "监控中": "監控中", "趋势": "趨勢", "节点概览": "節點總覽",
-        "合并延迟曲线": "合併延遲曲線", "主要颜色": "主要顏色", "个手动节点": "個手動節點", "刷新代理目录失败": "重新整理代理目錄失敗"
+        "合并延迟曲线": "合併延遲曲線", "主要颜色": "主要顏色", "个手动节点": "個手動節點", "刷新代理目录失败": "重新整理代理目錄失敗",
+        "已取消": "已取消"
     ]
     private static let english: [String: String] = [
         "控制": "Control", "状态": "Status", "当前节点": "Current Node", "监控节点数": "Monitored Nodes", "监控状态": "Monitoring",
@@ -172,7 +200,8 @@ enum L10n {
         "探测目标": "Probe Target", "数据点间隔": "Data Point Interval", "测速超时": "Delay Timeout", "每点探测次数": "Samples per Point",
         "次，取中位数": "samples, median", "点击“刷新代理列表”后选择节点。": "Refresh proxies, then choose nodes.",
         "所有选择节点": "All Selected Nodes", "等待数据": "Waiting for data", "监控中": "Monitoring", "趋势": "Trend", "节点概览": "Node Overview",
-        "合并延迟曲线": "Combined Latency Chart", "主要颜色": "Accent Color", "个手动节点": "manual nodes", "刷新代理目录失败": "Failed to refresh proxy catalog"
+        "合并延迟曲线": "Combined Latency Chart", "主要颜色": "Accent Color", "个手动节点": "manual nodes", "刷新代理目录失败": "Failed to refresh proxy catalog",
+        "已取消": "Cancelled"
     ]
 }
 
@@ -221,8 +250,19 @@ final class AppModel: ObservableObject {
         AccentColorOption.option(for: accentColorID).color
     }
 
+    var locale: Locale {
+        Locale(identifier: language.localeIdentifier)
+    }
+
     func t(_ key: String) -> String {
         L10n.text(key, language: language)
+    }
+
+    func displayError(_ description: String) -> String {
+        description
+            .replacingOccurrences(of: "已取消", with: t("已取消"))
+            .replacingOccurrences(of: "cancelled", with: t("已取消"), options: [.caseInsensitive])
+            .replacingOccurrences(of: "canceled", with: t("已取消"), options: [.caseInsensitive])
     }
 
     init() {
@@ -900,7 +940,7 @@ struct ContentView: View {
                 Section("Language") {
                     Picker("", selection: $model.languageCode) {
                         ForEach(AppLanguage.allCases) { language in
-                            Text(language.title).tag(language.rawValue)
+                            Text(language.title(for: model.language)).tag(language.rawValue)
                         }
                     }
                     .labelsHidden()
@@ -960,7 +1000,7 @@ struct ContentView: View {
                         Text(model.isRunning ? model.t("运行中") : model.t("已停止"))
                     }
                     if let error = model.latestError, !error.isEmpty {
-                        Text(error)
+                        Text(model.displayError(error))
                             .foregroundStyle(.red)
                             .font(.footnote)
                     }
@@ -1024,6 +1064,7 @@ struct ContentView: View {
         }
         .frame(minWidth: 1100, minHeight: 760)
         .tint(model.accentColor)
+        .environment(\.locale, model.locale)
         .animation(.smooth(duration: 0.32), value: selectedSidebarPage)
         .animation(.smooth(duration: 0.32), value: model.languageCode)
         .animation(.smooth(duration: 0.32), value: model.accentColorID)
@@ -1181,7 +1222,7 @@ struct NodePageView: View {
                     Text(record.latencyMs.map { "\($0) ms" } ?? "--")
                 }
                 TableColumn(model.t("说明")) { record in
-                    Text(record.errorDescription ?? "")
+                    Text(record.errorDescription.map(model.displayError) ?? "")
                         .lineLimit(1)
                 }
             }

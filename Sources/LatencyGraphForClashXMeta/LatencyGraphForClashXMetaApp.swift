@@ -551,7 +551,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.1"
     }
 
     private func scheduleMonitoringLoop() {
@@ -1028,6 +1028,25 @@ struct ContentView: View {
         ["settings", "overview"] + model.monitoredProxyNames.map { "node:\($0)" }
     }
 
+    private var controlButtonTitles: [String] {
+        [
+            model.t("开始监控"),
+            model.t("停止监控"),
+            model.t("立即探测"),
+            model.t("刷新代理列表"),
+            model.t("检查更新"),
+            model.t("删除历史数据")
+        ]
+    }
+
+    private var controlButtonWidth: CGFloat {
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let widestText = controlButtonTitles
+            .map { ceil(($0 as NSString).size(withAttributes: [.font: font]).width) }
+            .max() ?? 0
+        return widestText + 24
+    }
+
     var body: some View {
         NavigationSplitView {
             List {
@@ -1061,27 +1080,25 @@ struct ContentView: View {
                 }
 
                 Section(model.t("控制")) {
-                    Button(model.isRunning ? model.t("停止监控") : model.t("开始监控")) {
+                    controlButton(model.isRunning ? model.t("停止监控") : model.t("开始监控"), isProminent: true) {
                         model.isRunning ? model.stopMonitoring() : model.startMonitoring()
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(model.accentColor)
 
-                    Button(model.t("立即探测")) {
+                    controlButton(model.t("立即探测")) {
                         Task { await model.runProbe() }
                     }
                     .disabled(model.isTesting)
 
-                    Button(model.t("刷新代理列表")) {
+                    controlButton(model.t("刷新代理列表")) {
                         Task { await model.refreshProxyCatalog() }
                     }
 
-                    Button(model.t("检查更新")) {
+                    controlButton(model.t("检查更新")) {
                         Task { await model.checkForUpdates() }
                     }
                     .disabled(model.isCheckingForUpdates)
 
-                    Button(model.t("删除历史数据"), role: .destructive) {
+                    controlButton(model.t("删除历史数据"), role: .destructive) {
                         model.clearHistory()
                     }
                 }
@@ -1166,13 +1183,18 @@ struct ContentView: View {
                             .transition(pageTransition)
                     } else if selectedSidebarPage.hasPrefix("node:") {
                         let proxyName = String(selectedSidebarPage.dropFirst("node:".count))
-                        NodePageView(proxyName: proxyName, selectedHours: $selectedHours, availableHeight: geometry.size.height)
+                            NodePageView(
+                                proxyName: proxyName,
+                                selectedHours: $selectedHours,
+                                availableHeight: geometry.size.height,
+                                navigationDirection: navigationDirection
+                            )
                             .environmentObject(model)
                             .padding(20)
                             .id(selectedSidebarPage)
                             .transition(pageTransition)
                     } else {
-                        OverviewPage(selectedHours: $selectedHours)
+                            OverviewPage(selectedHours: $selectedHours, navigationDirection: navigationDirection)
                             .environmentObject(model)
                             .padding(20)
                             .id(selectedSidebarPage)
@@ -1205,6 +1227,26 @@ struct ContentView: View {
         withAnimation(interfaceAnimation) {
             selectedSidebarPage = page
         }
+    }
+
+    private func controlButton(_ title: String, role: ButtonRole? = nil, isProminent: Bool = false, action: @escaping () -> Void) -> some View {
+        Group {
+            if isProminent {
+                Button(role: role, action: action) {
+                    Text(title)
+                        .frame(width: controlButtonWidth)
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Button(role: role, action: action) {
+                    Text(title)
+                        .frame(width: controlButtonWidth)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .tint(model.accentColor)
+        .controlButtonHover(accentColor: model.accentColor)
     }
 }
 
@@ -1246,21 +1288,22 @@ struct AccentColorPicker: View {
 struct OverviewPage: View {
     @EnvironmentObject private var model: AppModel
     @Binding var selectedHours: Double
+    let navigationDirection: PageNavigationDirection
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(model.t("节点概览"))
                 .font(.title2.bold())
-                .gentleAppear()
+                .staggeredGroupAppear(index: 0)
 
             ForEach(Array(model.monitoredProxyNames.enumerated()), id: \.element) { index, proxyName in
                 NodeStatsOverviewRow(proxyName: proxyName)
                     .padding(.bottom, 8)
-                    .gentleAppear(delay: Double(index) * 0.025)
+                    .staggeredGroupAppear(index: index + 1)
             }
 
             combinedChartSection
-                .gentleAppear(delay: 0.08)
+                .chartReveal(direction: navigationDirection, pageID: "overview")
         }
     }
 
@@ -1298,16 +1341,17 @@ struct NodePageView: View {
     let proxyName: String
     @Binding var selectedHours: Double
     var availableHeight: CGFloat? = nil
-    @State private var latestRecordsTableHeight: CGFloat = 260
+    let navigationDirection: PageNavigationDirection
+    @State private var latestRecordsTableHeight: CGFloat = 180
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             headerCards
-                .gentleAppear()
+                .staggeredGroupAppear(index: 0)
             chartSection
-                .gentleAppear(delay: 0.04)
+                .chartReveal(direction: navigationDirection, pageID: "node:\(proxyName)")
             latestRecordsSection
-                .gentleAppear(delay: 0.08)
+                .staggeredGroupAppear(index: 2)
         }
     }
 
@@ -1411,11 +1455,15 @@ struct NodePageView: View {
 
     private func updateLatestRecordsTableHeight(from minY: CGFloat) {
         guard let availableHeight else { return }
-        let bottomPadding: CGFloat = 36
-        let nextHeight = max(220, availableHeight - minY - bottomPadding)
+        let bottomPadding: CGFloat = 28
+        let nextHeight = max(120, availableHeight - minY - bottomPadding)
         guard abs(latestRecordsTableHeight - nextHeight) > 0.5 else { return }
         DispatchQueue.main.async {
-            latestRecordsTableHeight = nextHeight
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                latestRecordsTableHeight = nextHeight
+            }
         }
     }
 }
@@ -1533,20 +1581,20 @@ struct SettingsPanel: View {
     }
 
     private var settingsRows: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            settingsCard(title: model.t("连接与认证")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsSection(title: model.t("连接与认证"), index: 0) {
                 controllerURLRow
                 secretRow
             }
 
-            settingsCard(title: model.t("监控节点")) {
+            settingsSection(title: model.t("监控节点"), index: 1) {
                 monitorAllRow
                 followGroupRow
                 proxyGroupRow
                 manualProxyRow
             }
 
-            settingsCard(title: model.t("探测参数")) {
+            settingsSection(title: model.t("探测参数"), index: 2) {
                 targetURLRow
                 dataPointIntervalRow
                 delayTimeoutRow
@@ -1568,20 +1616,19 @@ struct SettingsPanel: View {
         .animation(settingsAnimation, value: model.probeSampleCount)
     }
 
-    private func settingsCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func settingsSection<Content: View>(title: String, index: Int, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
-                .font(.headline)
+                .font(.title3.bold())
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 12) {
                 content()
             }
+            .settingsSolidCard(accentColor: model.accentColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .interactivePanel(accentColor: model.accentColor)
+        .staggeredGroupAppear(index: index)
     }
 
     private var controllerURLRow: some View {
@@ -1801,6 +1848,10 @@ struct LatencyChart: View {
         )
     }
 
+    private var showsDenseBars: Bool {
+        renderedRecords.count <= 360
+    }
+
     var body: some View {
         Chart {
             ForEach(renderedRecords) { point in
@@ -1824,11 +1875,13 @@ struct LatencyChart: View {
                     .foregroundStyle(color)
                     .lineStyle(StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
 
-                    BarMark(
-                        x: .value("时间", point.timestamp),
-                        y: .value("延迟", latency)
-                    )
-                    .foregroundStyle(color.opacity(0.42))
+                    if showsDenseBars {
+                        BarMark(
+                            x: .value("时间", point.timestamp),
+                            y: .value("延迟", latency)
+                        )
+                        .foregroundStyle(color.opacity(0.34))
+                    }
                 } else {
                     RuleMark(x: .value("失败时间", point.timestamp))
                         .foregroundStyle(.red.opacity(0.35))
@@ -1902,6 +1955,10 @@ struct MultiLatencyChart: View {
     let records: [ProbeRecord]
     let proxyNames: [String]
 
+    private var showsDenseBars: Bool {
+        records.count <= 520
+    }
+
     private func color(for proxyName: String) -> Color {
         let palette = AccentColorOption.all.map(\.color)
         guard let index = proxyNames.firstIndex(of: proxyName), !palette.isEmpty else {
@@ -1928,12 +1985,14 @@ struct MultiLatencyChart: View {
                     .foregroundStyle(by: .value("节点", point.proxyName))
                     .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
-                    BarMark(
-                        x: .value("时间", point.timestamp),
-                        y: .value("延迟", latency)
-                    )
-                    .foregroundStyle(by: .value("节点", point.proxyName))
-                    .opacity(0.24)
+                    if showsDenseBars {
+                        BarMark(
+                            x: .value("时间", point.timestamp),
+                            y: .value("延迟", latency)
+                        )
+                        .foregroundStyle(by: .value("节点", point.proxyName))
+                        .opacity(0.20)
+                    }
                 } else {
                     RuleMark(x: .value("失败时间", point.timestamp))
                         .foregroundStyle(.red.opacity(0.28))

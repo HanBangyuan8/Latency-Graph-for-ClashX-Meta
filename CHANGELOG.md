@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.2 - 2026-04-14
+
+Patch release.
+
+- Changed multi-sample latency probing to record the minimum successful sample.
+- Updated sample count UI copy to describe minimum-sample selection.
+
 ## v1.0.1 - 2026-04-14
 
 Patch release.

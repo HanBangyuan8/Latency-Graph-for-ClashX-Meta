@@ -57,6 +57,23 @@ struct LightweightPressButtonStyle: ButtonStyle {
     }
 }
 
+struct ControlButtonHoverModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+    let accentColor: Color
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(accentColor.opacity(isHovered ? 0.22 : 0), lineWidth: 1)
+            }
+            .scaleEffect(isHovered && !reduceMotion ? 1.015 : 1)
+            .animation(reduceMotion ? nil : MotionTokens.hover, value: isHovered)
+            .onHover { isHovered = $0 }
+    }
+}
+
 struct GentleAppearModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible = false
@@ -76,22 +93,36 @@ struct GentleAppearModifier: ViewModifier {
 }
 
 struct InteractivePanelModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
     let cornerRadius: CGFloat
     let accentColor: Color
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isHovered && !reduceMotion ? 1.002 : 1)
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(accentColor.opacity(isHovered ? 0.28 : 0), lineWidth: 1)
+                    .strokeBorder(accentColor.opacity(isHovered ? 0.18 : 0), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(isHovered && !reduceMotion ? 0.08 : 0), radius: 10, y: 4)
-            .brightness(isHovered && !reduceMotion ? 0.012 : 0)
-            .animation(reduceMotion ? nil : MotionTokens.hover, value: isHovered)
+            .animation(.linear(duration: 0.10), value: isHovered)
             .onHover { isHovered = $0 }
+    }
+}
+
+struct SettingsSolidCardModifier: ViewModifier {
+    let accentColor: Color
+
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.72))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(accentColor.opacity(0.12), lineWidth: 1)
+            }
     }
 }
 
@@ -143,6 +174,71 @@ struct SoftSectionAppearModifier: ViewModifier {
     }
 }
 
+struct StaggeredGroupAppearModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible = false
+    let index: Int
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible || reduceMotion ? 0 : 8)
+            .onAppear {
+                guard !isVisible else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18).delay(Double(index) * 0.035)) {
+                    isVisible = true
+                }
+            }
+    }
+}
+
+struct ChartRevealModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible = false
+    let direction: PageNavigationDirection
+    let pageID: String
+
+    private var initialOffset: CGFloat {
+        switch direction {
+        case .upward: -72
+        case .downward: 72
+        case .unchanged: 36
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible || reduceMotion ? 0 : initialOffset)
+            .onAppear {
+                restartReveal()
+            }
+            .onChange(of: pageID) { _ in
+                restartReveal()
+            }
+    }
+
+    private func restartReveal() {
+        guard !reduceMotion else {
+            isVisible = true
+            return
+        }
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            isVisible = false
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 35_000_000)
+            withAnimation(.interactiveSpring(response: 0.62, dampingFraction: 0.84, blendDuration: 0.10)) {
+                isVisible = true
+            }
+        }
+    }
+}
+
 extension View {
     func gentleAppear(delay: Double = 0) -> some View {
         modifier(GentleAppearModifier(delay: delay))
@@ -154,5 +250,21 @@ extension View {
 
     func softSectionAppear(delay: Double = 0, distance: CGFloat = 10) -> some View {
         modifier(SoftSectionAppearModifier(delay: delay, distance: distance))
+    }
+
+    func settingsSolidCard(accentColor: Color) -> some View {
+        modifier(SettingsSolidCardModifier(accentColor: accentColor))
+    }
+
+    func controlButtonHover(accentColor: Color) -> some View {
+        modifier(ControlButtonHoverModifier(accentColor: accentColor))
+    }
+
+    func staggeredGroupAppear(index: Int) -> some View {
+        modifier(StaggeredGroupAppearModifier(index: index))
+    }
+
+    func chartReveal(direction: PageNavigationDirection, pageID: String) -> some View {
+        modifier(ChartRevealModifier(direction: direction, pageID: pageID))
     }
 }

@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.1.1 - 2026-04-15
+
+Patch release.
+
+- Refined Settings page styling to avoid the previous heavy blur/material look.
+- Moved Settings section titles outside their cards for a layout closer to the main pages.
+- Restored Control button colors to native system bordered and bordered-prominent styles.
+- Kept Control buttons equal-width based on the longest localized control label.
+- Added lightweight hover feedback for Control buttons without changing their native colors.
+- Added staggered group entry animations to regular Overview and node pages.
+- Added a stronger directional chart reveal animation for page switches.
+- Reduced animation cost by removing heavier hover shadow, scale, and brightness effects from panels.
+- Reduced dense chart overdraw by skipping per-point bar marks when a chart has many rendered points.
+- Improved Recent Records table resizing so it can shrink with smaller windows and updates height without animation.
+
 ## v1.1.0 - 2026-04-14
 
 Major release.

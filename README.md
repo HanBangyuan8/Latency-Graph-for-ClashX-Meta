@@ -1,7 +1,9 @@
 # Latency Graph for ClashX Meta
 
 ![macOS](https://img.shields.io/badge/macOS-13%2B-blue)
+![Xcode](https://img.shields.io/badge/Xcode-15%2B-147EFB)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
+![Clash.Meta](https://img.shields.io/badge/Clash.Meta-compatible-6A5ACD)
 ![GitHub release](https://img.shields.io/github/v/release/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
 ![GitHub Downloads](https://img.shields.io/github/downloads/HanBangyuan8/Latency-Graph-for-ClashX-Meta/total)
 ![GitHub Repo stars](https://img.shields.io/github/stars/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=social)

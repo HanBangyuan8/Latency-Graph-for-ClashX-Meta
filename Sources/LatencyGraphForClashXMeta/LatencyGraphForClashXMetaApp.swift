@@ -181,7 +181,7 @@ enum L10n {
         "已设置": "已設定", "清空": "清空", "自动监控代理组所有节点": "自動監控代理組所有節點", "跟随代理组当前节点": "跟隨代理組目前節點",
         "代理组": "代理組", "手动多选节点": "手動多選節點", "勾选多个节点后，每轮采样都会分别记录，并在左侧节点分页中逐页查看。": "勾選多個節點後，每輪採樣都會分別記錄，並在左側節點分頁中逐頁查看。",
         "探测目标": "探測目標", "数据点间隔": "資料點間隔", "测速超时": "測速逾時", "每点探测次数": "每點探測次數",
-        "次，取中位数": "次，取中位數", "点击“刷新代理列表”后选择节点。": "點擊「重新整理代理列表」後選擇節點。",
+        "次，取最小值": "次，取最小值", "点击“刷新代理列表”后选择节点。": "點擊「重新整理代理列表」後選擇節點。",
         "所有选择节点": "所有選擇節點", "等待数据": "等待資料", "监控中": "監控中", "趋势": "趨勢", "节点概览": "節點總覽",
         "合并延迟曲线": "合併延遲曲線", "主要颜色": "主要顏色", "个手动节点": "個手動節點", "刷新代理目录失败": "重新整理代理目錄失敗",
         "已取消": "已取消"
@@ -198,7 +198,7 @@ enum L10n {
         "已设置": "Set", "清空": "Clear", "自动监控代理组所有节点": "Monitor all nodes in group", "跟随代理组当前节点": "Follow selected group node",
         "代理组": "Proxy Group", "手动多选节点": "Manual Multi-select Nodes", "勾选多个节点后，每轮采样都会分别记录，并在左侧节点分页中逐页查看。": "Selected nodes are recorded separately each batch and shown as pages in the sidebar.",
         "探测目标": "Probe Target", "数据点间隔": "Data Point Interval", "测速超时": "Delay Timeout", "每点探测次数": "Samples per Point",
-        "次，取中位数": "samples, median", "点击“刷新代理列表”后选择节点。": "Refresh proxies, then choose nodes.",
+        "次，取最小值": "samples, minimum", "点击“刷新代理列表”后选择节点。": "Refresh proxies, then choose nodes.",
         "所有选择节点": "All Selected Nodes", "等待数据": "Waiting for data", "监控中": "Monitoring", "趋势": "Trend", "节点概览": "Node Overview",
         "合并延迟曲线": "Combined Latency Chart", "主要颜色": "Accent Color", "个手动节点": "manual nodes", "刷新代理目录失败": "Failed to refresh proxy catalog",
         "已取消": "Cancelled"
@@ -575,12 +575,7 @@ final class AppModel: ObservableObject {
             throw AppError.custom(results.compactMap(\.errorDescription).last ?? "全部探测失败")
         }
 
-        let sorted = delays.sorted()
-        let middle = sorted.count / 2
-        if sorted.count.isMultiple(of: 2) {
-            return (sorted[middle - 1] + sorted[middle]) / 2
-        }
-        return sorted[middle]
+        return delays.min() ?? delays[0]
     }
 
     private func append(_ record: ProbeRecord) {
@@ -1494,7 +1489,7 @@ struct SettingsPanel: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                Text(model.t("次，取中位数"))
+                Text(model.t("次，取最小值"))
                     .foregroundStyle(.secondary)
             }
         }

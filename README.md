@@ -1,7 +1,8 @@
 # Latency Graph for ClashX Meta
 
-![GitHub Repo stars](https://img.shields.io/github/stars/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=social)
 ![GitHub release](https://img.shields.io/github/v/release/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
+![License](https://img.shields.io/github/license/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
+![GitHub Repo stars](https://img.shields.io/github/stars/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=social)
 ![macOS](https://img.shields.io/badge/macOS-13%2B-blue)
 
 A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latency.
@@ -20,10 +21,6 @@ A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latenc
 <img src="081657eb-d98f-4e92-bd0f-71a2d50eab4b.png" alt="Overview" width="900">
 
 <img src="3fb6f419-a19b-4449-8a48-2203bd34af70.png" alt="Node detail" width="900">
-
-## Stargazers
-
-[![Stargazers over time](https://starchart.cc/HanBangyuan8/Latency-Graph-for-ClashX-Meta.svg?variant=adaptive)](https://starchart.cc/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
 
 ## Requirements
 
@@ -62,8 +59,14 @@ Legacy `probes.json` data is imported automatically on first launch after upgrad
 
 ## Release
 
-See `RELEASE_CHECKLIST.md` for the v1.0.0 GitHub release steps.
+Download the latest signed ad-hoc macOS app archive from [GitHub Releases](https://github.com/HanBangyuan8/Latency-Graph-for-ClashX-Meta/releases).
+
+Release notes are maintained in `CHANGELOG.md`.
 
 ## License
 
 Copyright © 2026 Han. All rights reserved.
+
+## Stargazers
+
+[![Stargazers over time](https://starchart.cc/HanBangyuan8/Latency-Graph-for-ClashX-Meta.svg?variant=adaptive)](https://starchart.cc/HanBangyuan8/Latency-Graph-for-ClashX-Meta)

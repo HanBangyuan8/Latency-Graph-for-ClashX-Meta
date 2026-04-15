@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.2.0 - 2026-04-16
+
+Major compatibility and runtime optimization release.
+
+- Restored the macOS 13+ native SwiftUI `WindowGroup` + `NavigationSplitView` lifecycle used by v1.0.0 through v1.1.1.
+- Fixed the titlebar/sidebar regression caused by the previous AppKit-hosted compatibility window on newer macOS versions.
+- Kept macOS 12 on the compatibility window path instead of forcing it through newer UI assumptions.
+- Kept macOS 10.15 and macOS 11 on the legacy fixed-sidebar path; sidebar closing is intentionally unavailable there.
+- Added explicit runtime feature planning so each macOS generation activates only the necessary lifecycle, sidebar, transition, probing, and persistence behavior.
+- Added separate runtime profiles for macOS 10.15/11, macOS 12, macOS 13/14, and macOS 15+.
+- Added separate runtime tuning for Apple Silicon and Intel Macs.
+- Added a dedicated probe batch executor for bounded multi-node concurrency.
+- Added bounded per-node sample concurrency so sample count no longer blindly multiplies runtime pressure.
+- Kept multi-sample latency selection based on the minimum successful sample.
+- Batched probe record appends so a multi-node probe writes UI state once per batch instead of once per node.
+- Added debounced SQLite persistence to reduce high-frequency disk writes during monitoring.
+- Added runtime-specific history retention windows to limit memory and database pressure on older systems.
+- Added a record retention policy source module.
+- Added a runtime feature plan source module.
+- Added a probe batch executor source module.
+- Split launcher logic into its own source file.
+- Increased source file separation to make future compatibility work safer.
+- Updated bundle version metadata to v1.2.0.
+- Updated project documentation to state that runtime compatibility begins at macOS 10.15, while the complete intended feature set is supported on macOS 15+.
+- Documented that macOS 14 and earlier are compatibility targets only; version-specific bugs or imperfect UI there are expected rather than fully supported.
+
 ## v1.1.1 - 2026-04-15
 
 Patch release.

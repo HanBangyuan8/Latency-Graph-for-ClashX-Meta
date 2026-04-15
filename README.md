@@ -1,6 +1,7 @@
 # Latency Graph for ClashX Meta
 
-![macOS](https://img.shields.io/badge/macOS-13%2B-blue)
+![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue)
+![Best on macOS 15+](https://img.shields.io/badge/best%20experience-macOS%2015%2B-brightgreen)
 ![Xcode](https://img.shields.io/badge/Xcode-15%2B-147EFB)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 ![Clash.Meta](https://img.shields.io/badge/Clash.Meta-compatible-6A5ACD)
@@ -27,7 +28,9 @@ A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latenc
 
 ## Requirements
 
-- macOS 13+
+- Runtime requirement: macOS 10.15+
+- Full best-feature support: macOS 15+
+- macOS 14 and earlier are compatibility targets only; visual glitches or version-specific UI bugs may occur and are not treated as actively supported issues.
 - Xcode 15+ or Swift 5.9+
 - ClashX Meta / Clash Meta with `external-controller` enabled
 
@@ -62,9 +65,9 @@ Legacy `probes.json` data is imported automatically on first launch after upgrad
 
 ## Release
 
-Download the latest signed ad-hoc macOS app archive from [GitHub Releases](https://github.com/HanBangyuan8/Latency-Graph-for-ClashX-Meta/releases).
+Download v1.2.0 and newer signed ad-hoc macOS app archives from [GitHub Releases](https://github.com/HanBangyuan8/Latency-Graph-for-ClashX-Meta/releases).
 
-Release notes are maintained in `CHANGELOG.md`.
+Release notes are maintained in `CHANGELOG.md`. The app runs on macOS 10.15+, but macOS 15+ is the only fully supported target for the complete intended feature set and UI quality.
 
 ## License
 

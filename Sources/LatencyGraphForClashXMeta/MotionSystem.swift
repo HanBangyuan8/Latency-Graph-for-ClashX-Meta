@@ -8,6 +8,9 @@ enum MotionTokens {
     static let hover: Animation = .interactiveSpring(response: 0.30, dampingFraction: 0.74, blendDuration: 0.04)
     static let color: Animation = .easeInOut(duration: 0.30)
     static let listSelection: Animation = .interactiveSpring(response: 0.34, dampingFraction: 0.76, blendDuration: 0.06)
+    static let legacyAppear: Animation = .easeOut(duration: 0.28)
+    static let legacyHover: Animation = .easeOut(duration: 0.12)
+    static let legacyChart: Animation = .easeOut(duration: 0.62)
 }
 
 enum PageNavigationDirection {
@@ -57,6 +60,7 @@ struct LightweightPressButtonStyle: ButtonStyle {
     }
 }
 
+@available(macOS 12.0, *)
 struct ControlButtonHoverModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -64,11 +68,16 @@ struct ControlButtonHoverModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(accentColor.opacity(isHovered ? 0.08 : 0))
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(accentColor.opacity(isHovered ? 0.22 : 0), lineWidth: 1)
+                    .strokeBorder(accentColor.opacity(isHovered ? 0.45 : 0), lineWidth: isHovered ? 1.3 : 1)
             }
-            .scaleEffect(isHovered && !reduceMotion ? 1.015 : 1)
+            .scaleEffect(isHovered && !reduceMotion ? 1.025 : 1)
             .animation(reduceMotion ? nil : MotionTokens.hover, value: isHovered)
             .onHover { isHovered = $0 }
     }
@@ -92,22 +101,72 @@ struct GentleAppearModifier: ViewModifier {
     }
 }
 
+struct LegacyAppearModifier: ViewModifier {
+    @State private var isVisible = false
+    let index: Int
+    let distance: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible ? 0 : distance)
+            .scaleEffect(isVisible ? 1 : 0.992)
+            .onAppear {
+                guard !isVisible else { return }
+                withAnimation(MotionTokens.legacyAppear.delay(Double(index) * 0.045)) {
+                    isVisible = true
+                }
+            }
+    }
+}
+
+struct LegacyInteractiveCardModifier: ViewModifier {
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isHovered ? 1.012 : 1)
+            .shadow(color: Color.black.opacity(isHovered ? 0.10 : 0.04), radius: isHovered ? 8 : 3, x: 0, y: isHovered ? 4 : 1)
+            .animation(MotionTokens.legacyHover, value: isHovered)
+            .onHover { isHovered = $0 }
+    }
+}
+
+struct LegacyButtonMotionStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .opacity(configuration.isPressed ? 0.76 : 1)
+            .animation(MotionTokens.legacyHover, value: configuration.isPressed)
+    }
+}
+
+@available(macOS 12.0, *)
 struct InteractivePanelModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
     let cornerRadius: CGFloat
     let accentColor: Color
 
     func body(content: Content) -> some View {
         content
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(accentColor.opacity(isHovered ? 0.045 : 0))
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(accentColor.opacity(isHovered ? 0.18 : 0), lineWidth: 1)
+                    .strokeBorder(accentColor.opacity(isHovered ? 0.36 : 0), lineWidth: isHovered ? 1.4 : 1)
             }
-            .animation(.linear(duration: 0.10), value: isHovered)
+            .scaleEffect(isHovered ? 1.006 : 1)
+            .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0), radius: isHovered ? 8 : 0, x: 0, y: isHovered ? 3 : 0)
+            .animation(reduceMotion ? nil : MotionTokens.hover, value: isHovered)
             .onHover { isHovered = $0 }
     }
 }
 
+@available(macOS 12.0, *)
 struct SettingsSolidCardModifier: ViewModifier {
     let accentColor: Color
 
@@ -126,6 +185,7 @@ struct SettingsSolidCardModifier: ViewModifier {
     }
 }
 
+@available(macOS 12.0, *)
 struct SidebarPageButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let isSelected: Bool
@@ -154,6 +214,7 @@ struct SidebarPageButtonStyle: ButtonStyle {
     }
 }
 
+@available(macOS 12.0, *)
 struct SoftSectionAppearModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible = false
@@ -174,6 +235,7 @@ struct SoftSectionAppearModifier: ViewModifier {
     }
 }
 
+@available(macOS 12.0, *)
 struct StaggeredGroupAppearModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible = false
@@ -192,6 +254,7 @@ struct StaggeredGroupAppearModifier: ViewModifier {
     }
 }
 
+@available(macOS 12.0, *)
 struct ChartRevealModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible = false
@@ -239,6 +302,8 @@ struct ChartRevealModifier: ViewModifier {
     }
 }
 
+
+@available(macOS 12.0, *)
 extension View {
     func gentleAppear(delay: Double = 0) -> some View {
         modifier(GentleAppearModifier(delay: delay))
@@ -266,5 +331,15 @@ extension View {
 
     func chartReveal(direction: PageNavigationDirection, pageID: String) -> some View {
         modifier(ChartRevealModifier(direction: direction, pageID: pageID))
+    }
+}
+
+extension View {
+    func legacyAppear(index: Int = 0, distance: CGFloat = 10) -> some View {
+        modifier(LegacyAppearModifier(index: index, distance: distance))
+    }
+
+    func legacyInteractiveCard() -> some View {
+        modifier(LegacyInteractiveCardModifier())
     }
 }

@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "Latency Graph for ClashX Meta",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v10_15)
     ],
     products: [
         .executable(name: "Latency Graph for ClashX Meta", targets: ["LatencyGraphForClashXMeta"])

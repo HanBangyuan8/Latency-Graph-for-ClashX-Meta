@@ -1,13 +1,11 @@
 # Latency Graph for ClashX Meta
 
-![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue)
-![Best on macOS 15+](https://img.shields.io/badge/best%20experience-macOS%2015%2B-brightgreen)
-![Xcode](https://img.shields.io/badge/Xcode-15%2B-147EFB)
-![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
-![Clash.Meta](https://img.shields.io/badge/Clash.Meta-compatible-6A5ACD)
-![GitHub release](https://img.shields.io/github/v/release/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
-![GitHub Downloads](https://img.shields.io/github/downloads/HanBangyuan8/Latency-Graph-for-ClashX-Meta/total)
-![GitHub Repo stars](https://img.shields.io/github/stars/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=social)
+![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue?style=flat-square)
+![Xcode](https://img.shields.io/badge/Xcode-15%2B-147EFB?style=flat-square)
+![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange?style=flat-square)
+![GitHub release](https://img.shields.io/github/v/release/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=flat-square)
+![GitHub Downloads](https://img.shields.io/github/downloads/HanBangyuan8/Latency-Graph-for-ClashX-Meta/total?style=flat-square)
+![GitHub Repo stars](https://img.shields.io/github/stars/HanBangyuan8/Latency-Graph-for-ClashX-Meta?style=flat-square)
 
 A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latency.
 

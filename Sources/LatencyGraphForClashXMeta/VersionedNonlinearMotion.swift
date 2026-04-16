@@ -2,9 +2,15 @@ import SwiftUI
 
 struct VersionedMotionProfile {
     let runtimeProfile: RuntimeOptimizationProfile
+    let intensity: MotionIntensity
+
+    init(runtimeProfile: RuntimeOptimizationProfile, intensity: MotionIntensity = .enhanced) {
+        self.runtimeProfile = runtimeProfile
+        self.intensity = intensity
+    }
 
     static var current: VersionedMotionProfile {
-        VersionedMotionProfile(runtimeProfile: .current)
+        VersionedMotionProfile(runtimeProfile: .current, intensity: .enhanced)
     }
 
     var startupAnimation: Animation {
@@ -29,6 +35,30 @@ struct VersionedMotionProfile {
     }
 
     var pageSwitchAnimation: Animation {
+        if intensity == .reduced {
+            return reducedPageSwitchAnimation
+        }
+        switch (runtimeProfile.chipFamily, runtimeProfile.osFamily) {
+        case (.appleSilicon, .macOS15OrNewer):
+            return .interpolatingSpring(mass: 0.74, stiffness: 132, damping: 15.4, initialVelocity: 0.24)
+        case (.appleSilicon, .macOS13Or14):
+            return .interpolatingSpring(mass: 0.86, stiffness: 112, damping: 16.4, initialVelocity: 0.18)
+        case (.appleSilicon, .macOS12):
+            return .interactiveSpring(response: 0.64, dampingFraction: 0.85, blendDuration: 0.09)
+        case (.appleSilicon, .macOS1015Or11):
+            return .easeOut(duration: 0.32)
+        case (.intel, .macOS15OrNewer):
+            return .interactiveSpring(response: 0.56, dampingFraction: 0.89, blendDuration: 0.09)
+        case (.intel, .macOS13Or14):
+            return .interactiveSpring(response: 0.52, dampingFraction: 0.91, blendDuration: 0.07)
+        case (.intel, .macOS12):
+            return .easeOut(duration: 0.30)
+        case (.intel, .macOS1015Or11):
+            return .easeOut(duration: 0.21)
+        }
+    }
+
+    private var reducedPageSwitchAnimation: Animation {
         switch (runtimeProfile.chipFamily, runtimeProfile.osFamily) {
         case (.appleSilicon, .macOS15OrNewer):
             return .interpolatingSpring(mass: 0.70, stiffness: 148, damping: 14.5, initialVelocity: 0.28)
@@ -164,20 +194,36 @@ struct VersionedMotionProfile {
     }
 
     var pageOffset: CGFloat {
+        if intensity == .reduced {
+            switch runtimeProfile.osFamily {
+            case .macOS15OrNewer: return 28
+            case .macOS13Or14: return 24
+            case .macOS12: return 18
+            case .macOS1015Or11: return 10
+            }
+        }
         switch runtimeProfile.osFamily {
-        case .macOS15OrNewer: return 28
-        case .macOS13Or14: return 24
-        case .macOS12: return 18
-        case .macOS1015Or11: return 10
+        case .macOS15OrNewer: return 220
+        case .macOS13Or14: return 198
+        case .macOS12: return 156
+        case .macOS1015Or11: return 108
         }
     }
 
     var pageScale: CGFloat {
+        if intensity == .reduced {
+            switch runtimeProfile.osFamily {
+            case .macOS15OrNewer: return 0.990
+            case .macOS13Or14: return 0.992
+            case .macOS12: return 0.995
+            case .macOS1015Or11: return 0.998
+            }
+        }
         switch runtimeProfile.osFamily {
-        case .macOS15OrNewer: return 0.990
-        case .macOS13Or14: return 0.992
-        case .macOS12: return 0.995
-        case .macOS1015Or11: return 0.998
+        case .macOS15OrNewer: return 0.948
+        case .macOS13Or14: return 0.954
+        case .macOS12: return 0.968
+        case .macOS1015Or11: return 0.984
         }
     }
 
@@ -227,12 +273,28 @@ struct VersionedMotionProfile {
     }
 
     var pageSettleDelay: UInt64 {
-        switch runtimeProfile.osFamily {
-        case .macOS15OrNewer: return 170_000_000
-        case .macOS13Or14: return 145_000_000
-        case .macOS12: return 115_000_000
-        case .macOS1015Or11: return 70_000_000
+        if intensity == .reduced {
+            switch runtimeProfile.osFamily {
+            case .macOS15OrNewer: return 170_000_000
+            case .macOS13Or14: return 145_000_000
+            case .macOS12: return 115_000_000
+            case .macOS1015Or11: return 70_000_000
+            }
         }
+        switch runtimeProfile.osFamily {
+        case .macOS15OrNewer: return 190_000_000
+        case .macOS13Or14: return 162_000_000
+        case .macOS12: return 130_000_000
+        case .macOS1015Or11: return 82_000_000
+        }
+    }
+
+    var pageResolveBounce: CGFloat {
+        intensity == .enhanced ? 0.075 : 0.060
+    }
+
+    var pageResolveScale: CGFloat {
+        intensity == .enhanced ? 1.008 : 1.004
     }
 }
 
@@ -336,7 +398,7 @@ struct VersionedPageSwitchMotionModifier: ViewModifier {
         switch phase {
         case .settled: return 0
         case .entering: return signedOffset
-        case .resolving: return -signedOffset * 0.06
+        case .resolving: return -signedOffset * profile.pageResolveBounce
         }
     }
 
@@ -344,7 +406,7 @@ struct VersionedPageSwitchMotionModifier: ViewModifier {
         switch phase {
         case .settled: return 1
         case .entering: return profile.pageScale
-        case .resolving: return 1.004
+        case .resolving: return profile.pageResolveScale
         }
     }
 

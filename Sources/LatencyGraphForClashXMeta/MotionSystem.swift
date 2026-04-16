@@ -34,16 +34,20 @@ enum PageNavigationDirection {
         }
     }
 
-    func transition(reduceMotion: Bool) -> AnyTransition {
+    func transition(reduceMotion: Bool, intensity: MotionIntensity = .enhanced) -> AnyTransition {
         guard !reduceMotion else { return .opacity }
         let insertionAnchor: UnitPoint = insertionEdge == .bottom ? .bottom : .top
         let removalAnchor: UnitPoint = removalEdge == .bottom ? .bottom : .top
+        let insertionDistance: CGFloat = intensity == .enhanced ? 180 : 18
+        let removalDistance: CGFloat = intensity == .enhanced ? 76 : 10
+        let insertionScale: CGFloat = intensity == .enhanced ? 0.955 : 0.996
+        let removalScale: CGFloat = intensity == .enhanced ? 0.982 : 0.998
         return .asymmetric(
-            insertion: .offset(x: 0, y: insertionEdge == .bottom ? 18 : -18)
-                .combined(with: .scale(scale: 0.996, anchor: insertionAnchor))
+            insertion: .offset(x: 0, y: insertionEdge == .bottom ? insertionDistance : -insertionDistance)
+                .combined(with: .scale(scale: insertionScale, anchor: insertionAnchor))
                 .combined(with: .opacity),
-            removal: .offset(x: 0, y: removalEdge == .bottom ? 10 : -10)
-                .combined(with: .scale(scale: 0.998, anchor: removalAnchor))
+            removal: .offset(x: 0, y: removalEdge == .bottom ? removalDistance : -removalDistance)
+                .combined(with: .scale(scale: removalScale, anchor: removalAnchor))
                 .combined(with: .opacity)
         )
     }

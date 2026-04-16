@@ -99,6 +99,13 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
 }
 
+enum MotionIntensity: String, CaseIterable, Identifiable {
+    case enhanced
+    case reduced
+
+    var id: String { rawValue }
+}
+
 struct AccentColorOption: Identifiable, Hashable {
     let id: String
     let simplifiedName: String
@@ -168,7 +175,7 @@ enum L10n {
         "合并延迟曲线": "合併延遲曲線", "主要颜色": "主要顏色", "个手动节点": "個手動節點", "刷新代理目录失败": "重新整理代理目錄失敗",
         "已取消": "已取消", "检查更新": "檢查更新", "发现新版本 %@": "發現新版本 %@", "已经是最新版本": "已經是最新版本",
         "检查更新失败": "檢查更新失敗", "打开下载页": "打開下載頁", "每日自动检查": "每日自動檢查",
-        "Language": "語言", "Controller URL": "控制器 URL", "Secret": "密鑰",
+        "Language": "語言", "动态效果": "動態效果", "增强": "增強", "减弱": "減弱", "Controller URL": "控制器 URL", "Secret": "密鑰",
         "连接与认证": "連線與認證", "监控节点": "監控節點", "探测参数": "探測參數"
     ]
     private static let english: [String: String] = [
@@ -188,7 +195,7 @@ enum L10n {
         "合并延迟曲线": "Combined Latency Chart", "主要颜色": "Accent Color", "个手动节点": "manual nodes", "刷新代理目录失败": "Failed to refresh proxy catalog",
         "已取消": "Cancelled", "检查更新": "Check for Updates", "发现新版本 %@": "New version available: %@", "已经是最新版本": "Already up to date",
         "检查更新失败": "Update check failed", "打开下载页": "Open Download Page", "每日自动检查": "Daily automatic check",
-        "Language": "Language", "Controller URL": "Controller URL", "Secret": "Secret",
+        "Language": "Language", "动态效果": "Motion", "增强": "Enhanced", "减弱": "Reduced", "Controller URL": "Controller URL", "Secret": "Secret",
         "连接与认证": "Connection & Auth", "监控节点": "Monitored Nodes", "探测参数": "Probe Settings"
     ]
 }
@@ -208,6 +215,7 @@ final class AppModel: ObservableObject {
     @Published var proxyGroupName: String { didSet { UserDefaults.standard.set(proxyGroupName, forKey: "proxyGroupName") } }
     @Published var languageCode: String { didSet { UserDefaults.standard.set(languageCode, forKey: "languageCode") } }
     @Published var accentColorID: String { didSet { UserDefaults.standard.set(accentColorID, forKey: "accentColorID") } }
+    @Published var motionIntensityID: String { didSet { UserDefaults.standard.set(motionIntensityID, forKey: "motionIntensityID") } }
     @Published var lastUpdateCheckAt: Double { didSet { UserDefaults.standard.set(lastUpdateCheckAt, forKey: "lastUpdateCheckAt") } }
 
     @Published var records: [ProbeRecord] = []
@@ -249,6 +257,10 @@ final class AppModel: ObservableObject {
         AccentColorOption.option(for: accentColorID).color
     }
 
+    var motionIntensity: MotionIntensity {
+        MotionIntensity(rawValue: motionIntensityID) ?? .enhanced
+    }
+
     var locale: Locale {
         Locale(identifier: language.localeIdentifier)
     }
@@ -279,6 +291,7 @@ final class AppModel: ObservableObject {
         self.proxyGroupName = defaults.string(forKey: "proxyGroupName") ?? "GLOBAL"
         self.languageCode = defaults.string(forKey: "languageCode") ?? AppLanguage.simplifiedChinese.rawValue
         self.accentColorID = defaults.string(forKey: "accentColorID") ?? "purple"
+        self.motionIntensityID = defaults.string(forKey: "motionIntensityID") ?? MotionIntensity.enhanced.rawValue
         self.lastUpdateCheckAt = defaults.object(forKey: "lastUpdateCheckAt") as? Double ?? 0
         normalizeStoredChoices()
         self.records = store.loadRecords()
@@ -556,7 +569,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.1"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.2"
     }
 
     private func scheduleMonitoringLoop() {
@@ -991,7 +1004,7 @@ struct ModernContentView: View {
     @State private var isSidebarVisible = true
 
     private var versionedMotionProfile: VersionedMotionProfile {
-        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile, intensity: model.motionIntensity)
     }
 
     private var interfaceAnimation: Animation? {
@@ -999,7 +1012,7 @@ struct ModernContentView: View {
     }
 
     private var pageTransition: AnyTransition {
-        navigationDirection.transition(reduceMotion: reduceMotion)
+        navigationDirection.transition(reduceMotion: reduceMotion, intensity: model.motionIntensity)
     }
 
     private var sidebarPageOrder: [String] {
@@ -1050,6 +1063,7 @@ struct ModernContentView: View {
         .animation(interfaceAnimation, value: selectedSidebarPage)
         .animation(interfaceAnimation, value: model.languageCode)
         .animation(interfaceAnimation, value: model.accentColorID)
+        .animation(interfaceAnimation, value: model.motionIntensityID)
         .versionedStartupMotion(profile: versionedMotionProfile)
     }
 
@@ -1125,6 +1139,15 @@ struct ModernContentView: View {
                     ForEach(AppLanguage.allCases) { language in
                         Text(language.title).tag(language.rawValue)
                     }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+
+            Section(model.t("动态效果")) {
+                Picker("", selection: $model.motionIntensityID) {
+                    Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
+                    Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
@@ -1323,7 +1346,7 @@ struct NativeModernContentView: View {
     @State private var navigationDirection: PageNavigationDirection = .downward
 
     private var versionedMotionProfile: VersionedMotionProfile {
-        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile, intensity: model.motionIntensity)
     }
 
     private var interfaceAnimation: Animation? {
@@ -1331,7 +1354,7 @@ struct NativeModernContentView: View {
     }
 
     private var pageTransition: AnyTransition {
-        navigationDirection.transition(reduceMotion: reduceMotion)
+        navigationDirection.transition(reduceMotion: reduceMotion, intensity: model.motionIntensity)
     }
 
     private var sidebarPageOrder: [String] {
@@ -1365,6 +1388,15 @@ struct NativeModernContentView: View {
                         ForEach(AppLanguage.allCases) { language in
                             Text(language.title).tag(language.rawValue)
                         }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                }
+
+                Section(model.t("动态效果")) {
+                    Picker("", selection: $model.motionIntensityID) {
+                        Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
+                        Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
@@ -1528,6 +1560,7 @@ struct NativeModernContentView: View {
         .animation(interfaceAnimation, value: selectedSidebarPage)
         .animation(interfaceAnimation, value: model.languageCode)
         .animation(interfaceAnimation, value: model.accentColorID)
+        .animation(interfaceAnimation, value: model.motionIntensityID)
         .versionedStartupMotion(profile: versionedMotionProfile)
     }
 
@@ -1626,7 +1659,7 @@ struct OverviewPage: View {
     let navigationDirection: PageNavigationDirection
 
     private var versionedMotionProfile: VersionedMotionProfile {
-        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile, intensity: model.motionIntensity)
     }
 
     var body: some View {
@@ -1685,7 +1718,7 @@ struct NodePageView: View {
     @State private var latestRecordsTableHeight: CGFloat = 180
 
     private var versionedMotionProfile: VersionedMotionProfile {
-        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile, intensity: model.motionIntensity)
     }
 
     var body: some View {
@@ -1842,7 +1875,7 @@ struct SettingsPage: View {
     @EnvironmentObject private var model: AppModel
 
     private var versionedMotionProfile: VersionedMotionProfile {
-        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile, intensity: model.motionIntensity)
     }
 
     var body: some View {
@@ -3006,7 +3039,7 @@ struct LegacyContentView: View {
     @State private var selectedHours: Double = 24
 
     private var versionedMotionProfile: VersionedMotionProfile {
-        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile, intensity: model.motionIntensity)
     }
 
     private var selectedRecords: [ProbeRecord] {
@@ -3069,6 +3102,14 @@ struct LegacyContentView: View {
                 ForEach(AppLanguage.allCases) { language in
                     Text(language.title).tag(language.rawValue)
                 }
+            }
+            .pickerStyle(SegmentedPickerStyle())
+
+            Text(model.t("动态效果"))
+                .font(.headline)
+            Picker("", selection: $model.motionIntensityID) {
+                Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
+                Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
             }
             .pickerStyle(SegmentedPickerStyle())
 

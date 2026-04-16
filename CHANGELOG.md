@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.2 - 2026-04-16
+
+Patch release.
+
+- Added a sidebar Motion setting with Enhanced and Reduced modes.
+- Kept Enhanced as the current stronger page-transition motion.
+- Restored Reduced as the calmer v1.2.1-style page-transition behavior.
+- Persisted the selected motion mode across launches.
+
 ## v1.2.1 - 2026-04-16
 
 Patch release.

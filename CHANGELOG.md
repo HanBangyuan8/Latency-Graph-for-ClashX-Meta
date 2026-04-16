@@ -2,8 +2,9 @@
 
 ## v1.2.3 - 2026-04-16
 
-Patch release.
+Patch and compatibility release.
 
+- Fixed a critical compatibility issue affecting Intel Macs.
 - Added a third Motion mode that disables custom app animations.
 - Applied the no-animation mode to page transitions, startup motion, component entrance motion, and pressed-state motion.
 - Kept Enhanced and Reduced motion modes available from the sidebar.

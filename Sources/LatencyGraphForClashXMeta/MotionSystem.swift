@@ -39,11 +39,11 @@ enum PageNavigationDirection {
         let insertionAnchor: UnitPoint = insertionEdge == .bottom ? .bottom : .top
         let removalAnchor: UnitPoint = removalEdge == .bottom ? .bottom : .top
         return .asymmetric(
-            insertion: .move(edge: insertionEdge)
-                .combined(with: .scale(scale: 0.985, anchor: insertionAnchor))
+            insertion: .offset(x: 0, y: insertionEdge == .bottom ? 18 : -18)
+                .combined(with: .scale(scale: 0.996, anchor: insertionAnchor))
                 .combined(with: .opacity),
-            removal: .move(edge: removalEdge)
-                .combined(with: .scale(scale: 0.992, anchor: removalAnchor))
+            removal: .offset(x: 0, y: removalEdge == .bottom ? 10 : -10)
+                .combined(with: .scale(scale: 0.998, anchor: removalAnchor))
                 .combined(with: .opacity)
         )
     }
@@ -94,7 +94,7 @@ struct GentleAppearModifier: ViewModifier {
             .offset(y: isVisible || reduceMotion ? 0 : 6)
             .onAppear {
                 guard !isVisible else { return }
-                withAnimation(reduceMotion ? nil : MotionTokens.appear.delay(delay)) {
+                withAnimation(reduceMotion ? nil : MotionTokens.appear) {
                     isVisible = true
                 }
             }
@@ -113,7 +113,7 @@ struct LegacyAppearModifier: ViewModifier {
             .scaleEffect(isVisible ? 1 : 0.992)
             .onAppear {
                 guard !isVisible else { return }
-                withAnimation(MotionTokens.legacyAppear.delay(Double(index) * 0.045)) {
+                withAnimation(MotionTokens.legacyAppear) {
                     isVisible = true
                 }
             }
@@ -228,7 +228,7 @@ struct SoftSectionAppearModifier: ViewModifier {
             .blur(radius: isVisible || reduceMotion ? 0 : 1.8)
             .onAppear {
                 guard !isVisible else { return }
-                withAnimation(reduceMotion ? nil : MotionTokens.appear.delay(delay)) {
+                withAnimation(reduceMotion ? nil : MotionTokens.appear) {
                     isVisible = true
                 }
             }
@@ -247,7 +247,7 @@ struct StaggeredGroupAppearModifier: ViewModifier {
             .offset(y: isVisible || reduceMotion ? 0 : 8)
             .onAppear {
                 guard !isVisible else { return }
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18).delay(Double(index) * 0.035)) {
+                withAnimation(reduceMotion ? nil : MotionTokens.appear) {
                     isVisible = true
                 }
             }
@@ -263,9 +263,9 @@ struct ChartRevealModifier: ViewModifier {
 
     private var initialOffset: CGFloat {
         switch direction {
-        case .upward: -72
-        case .downward: 72
-        case .unchanged: 36
+        case .upward: -14
+        case .downward: 14
+        case .unchanged: 8
         }
     }
 
@@ -294,8 +294,8 @@ struct ChartRevealModifier: ViewModifier {
         }
 
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 35_000_000)
-            withAnimation(.interactiveSpring(response: 0.62, dampingFraction: 0.84, blendDuration: 0.10)) {
+            try? await Task.sleep(nanoseconds: 12_000_000)
+            withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.92, blendDuration: 0.05)) {
                 isVisible = true
             }
         }

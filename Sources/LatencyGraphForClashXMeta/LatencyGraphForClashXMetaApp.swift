@@ -556,7 +556,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.1"
     }
 
     private func scheduleMonitoringLoop() {
@@ -990,8 +990,12 @@ struct ModernContentView: View {
     @State private var navigationDirection: PageNavigationDirection = .downward
     @State private var isSidebarVisible = true
 
+    private var versionedMotionProfile: VersionedMotionProfile {
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+    }
+
     private var interfaceAnimation: Animation? {
-        model.runtimeProfile.pageAnimation(reduceMotion: reduceMotion)
+        reduceMotion ? nil : versionedMotionProfile.pageSwitchAnimation
     }
 
     private var pageTransition: AnyTransition {
@@ -1046,6 +1050,7 @@ struct ModernContentView: View {
         .animation(interfaceAnimation, value: selectedSidebarPage)
         .animation(interfaceAnimation, value: model.languageCode)
         .animation(interfaceAnimation, value: model.accentColorID)
+        .versionedStartupMotion(profile: versionedMotionProfile)
     }
 
     private var sidebarShell: some View {
@@ -1141,7 +1146,7 @@ struct ModernContentView: View {
                         }
                     }
                 }
-                .buttonStyle(SidebarPageButtonStyle(isSelected: selectedSidebarPage == "settings", accentColor: model.accentColor))
+                .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "settings", accentColor: model.accentColor, profile: versionedMotionProfile))
             }
 
             Section(model.t("控制")) {
@@ -1209,7 +1214,7 @@ struct ModernContentView: View {
                         }
                     }
                 }
-                .buttonStyle(SidebarPageButtonStyle(isSelected: selectedSidebarPage == "overview", accentColor: model.accentColor))
+                .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "overview", accentColor: model.accentColor, profile: versionedMotionProfile))
             }
 
             Section(model.t("节点分页")) {
@@ -1226,7 +1231,7 @@ struct ModernContentView: View {
                             }
                         }
                     }
-                    .buttonStyle(SidebarPageButtonStyle(isSelected: selectedSidebarPage == "node:\(proxy)", accentColor: model.accentColor))
+                    .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "node:\(proxy)", accentColor: model.accentColor, profile: versionedMotionProfile))
                 }
             }
         }
@@ -1267,6 +1272,7 @@ struct ModernContentView: View {
                             .transition(pageTransition)
                     }
                 }
+                .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
                 .coordinateSpace(name: "detailScroll")
                 .onChange(of: selectedSidebarPage) { _ in
                     withAnimation(interfaceAnimation) {
@@ -1316,8 +1322,12 @@ struct NativeModernContentView: View {
     @State private var selectedSidebarPage: String = "overview"
     @State private var navigationDirection: PageNavigationDirection = .downward
 
+    private var versionedMotionProfile: VersionedMotionProfile {
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+    }
+
     private var interfaceAnimation: Animation? {
-        reduceMotion ? nil : MotionTokens.page
+        reduceMotion ? nil : versionedMotionProfile.pageSwitchAnimation
     }
 
     private var pageTransition: AnyTransition {
@@ -1376,7 +1386,7 @@ struct NativeModernContentView: View {
                             }
                         }
                     }
-                    .buttonStyle(SidebarPageButtonStyle(isSelected: selectedSidebarPage == "settings", accentColor: model.accentColor))
+                    .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "settings", accentColor: model.accentColor, profile: versionedMotionProfile))
                 }
 
                 Section(model.t("控制")) {
@@ -1444,7 +1454,7 @@ struct NativeModernContentView: View {
                             }
                         }
                     }
-                    .buttonStyle(SidebarPageButtonStyle(isSelected: selectedSidebarPage == "overview", accentColor: model.accentColor))
+                    .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "overview", accentColor: model.accentColor, profile: versionedMotionProfile))
                 }
 
                 Section(model.t("节点分页")) {
@@ -1461,7 +1471,7 @@ struct NativeModernContentView: View {
                                 }
                             }
                         }
-                        .buttonStyle(SidebarPageButtonStyle(isSelected: selectedSidebarPage == "node:\(proxy)", accentColor: model.accentColor))
+                        .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "node:\(proxy)", accentColor: model.accentColor, profile: versionedMotionProfile))
                     }
                 }
             }
@@ -1501,6 +1511,7 @@ struct NativeModernContentView: View {
                             .transition(pageTransition)
                     }
                     }
+                    .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
                     .coordinateSpace(name: "detailScroll")
                     .onChange(of: selectedSidebarPage) { _ in
                     withAnimation(interfaceAnimation) {
@@ -1517,6 +1528,7 @@ struct NativeModernContentView: View {
         .animation(interfaceAnimation, value: selectedSidebarPage)
         .animation(interfaceAnimation, value: model.languageCode)
         .animation(interfaceAnimation, value: model.accentColorID)
+        .versionedStartupMotion(profile: versionedMotionProfile)
     }
 
     private func selectPage(_ page: String) {
@@ -1613,20 +1625,24 @@ struct OverviewPage: View {
     @Binding var selectedHours: Double
     let navigationDirection: PageNavigationDirection
 
+    private var versionedMotionProfile: VersionedMotionProfile {
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(model.t("节点概览"))
                 .font(.title2.bold())
-                .staggeredGroupAppear(index: 0)
+                .versionedComponentAppear(profile: versionedMotionProfile, pageID: "overview", direction: navigationDirection)
 
-            ForEach(Array(model.monitoredProxyNames.enumerated()), id: \.element) { index, proxyName in
+            ForEach(model.monitoredProxyNames, id: \.self) { proxyName in
                 NodeStatsOverviewRow(proxyName: proxyName)
                     .padding(.bottom, 8)
-                    .staggeredGroupAppear(index: index + 1)
+                    .versionedComponentAppear(profile: versionedMotionProfile, pageID: "overview", direction: navigationDirection)
             }
 
             combinedChartSection
-                .chartReveal(direction: navigationDirection, pageID: "overview")
+                .versionedComponentAppear(profile: versionedMotionProfile, pageID: "overview", direction: navigationDirection, isChart: true)
         }
     }
 
@@ -1668,14 +1684,18 @@ struct NodePageView: View {
     let navigationDirection: PageNavigationDirection
     @State private var latestRecordsTableHeight: CGFloat = 180
 
+    private var versionedMotionProfile: VersionedMotionProfile {
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             headerCards
-                .staggeredGroupAppear(index: 0)
+                .versionedComponentAppear(profile: versionedMotionProfile, pageID: "node:\(proxyName)", direction: navigationDirection)
             chartSection
-                .chartReveal(direction: navigationDirection, pageID: "node:\(proxyName)")
+                .versionedComponentAppear(profile: versionedMotionProfile, pageID: "node:\(proxyName)", direction: navigationDirection, isChart: true)
             latestRecordsSection
-                .staggeredGroupAppear(index: 2)
+                .versionedComponentAppear(profile: versionedMotionProfile, pageID: "node:\(proxyName)", direction: navigationDirection)
         }
     }
 
@@ -1821,13 +1841,17 @@ struct NodeStatsOverviewRow: View {
 struct SettingsPage: View {
     @EnvironmentObject private var model: AppModel
 
+    private var versionedMotionProfile: VersionedMotionProfile {
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(model.t("设置"))
                 .font(.title2.bold())
-                .gentleAppear()
+                .versionedComponentAppear(profile: versionedMotionProfile, pageID: "settings", direction: .unchanged)
             SettingsPanel(model: model)
-                .gentleAppear(delay: 0.04)
+                .versionedComponentAppear(profile: versionedMotionProfile, pageID: "settings", direction: .unchanged)
         }
     }
 }
@@ -2191,7 +2215,8 @@ struct LatencyChart: View {
                 records: renderedRecords,
                 series: [ChartSeriesStyle(proxyName: nil, color: color)],
                 showsBars: showsDenseBars,
-                showsAxes: true
+                showsAxes: true,
+                showsArea: true
             )
         }
     }
@@ -2211,7 +2236,8 @@ struct MenuLatencySparkline: View {
                     records: records,
                     series: [ChartSeriesStyle(proxyName: nil, color: color)],
                     showsBars: records.count <= 160,
-                    showsAxes: false
+                    showsAxes: false,
+                    showsArea: true
                 )
             }
         }
@@ -2243,8 +2269,9 @@ struct MultiLatencyChart: View {
             CanvasLatencyChart(
                 records: records,
                 series: proxyNames.map { ChartSeriesStyle(proxyName: $0, color: color(for: $0)) },
-                showsBars: showsDenseBars,
-                showsAxes: true
+                showsBars: false,
+                showsAxes: true,
+                showsArea: false
             )
         }
     }
@@ -2262,6 +2289,7 @@ private struct CanvasLatencyChart: View {
     let series: [ChartSeriesStyle]
     let showsBars: Bool
     let showsAxes: Bool
+    let showsArea: Bool
 
     private let leftAxisWidth: CGFloat = 52
     private let bottomAxisHeight: CGFloat = 28
@@ -2367,7 +2395,9 @@ private struct CanvasLatencyChart: View {
                 drawBars(points: coordinates, color: style.color, context: &context, plotRect: plotRect)
             }
 
-            drawArea(points: coordinates, color: style.color, context: &context, plotRect: plotRect)
+            if showsArea {
+                drawArea(points: coordinates, color: style.color, context: &context, plotRect: plotRect)
+            }
             drawLine(points: coordinates, color: style.color, context: &context)
         }
     }
@@ -2616,13 +2646,6 @@ private struct ModernMultiLatencyChart: View {
         Chart {
             ForEach(records) { point in
                 if let latency = point.latencyMs, point.success {
-                    AreaMark(
-                        x: .value("时间", point.timestamp),
-                        y: .value("延迟", latency)
-                    )
-                    .foregroundStyle(by: .value("节点", point.proxyName))
-                    .opacity(0.16)
-
                     LineMark(
                         x: .value("时间", point.timestamp),
                         y: .value("延迟", latency)
@@ -2630,14 +2653,6 @@ private struct ModernMultiLatencyChart: View {
                     .foregroundStyle(by: .value("节点", point.proxyName))
                     .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
-                    if showsDenseBars {
-                        BarMark(
-                            x: .value("时间", point.timestamp),
-                            y: .value("延迟", latency)
-                        )
-                        .foregroundStyle(by: .value("节点", point.proxyName))
-                        .opacity(0.20)
-                    }
                 } else {
                     RuleMark(x: .value("失败时间", point.timestamp))
                         .foregroundStyle(.red.opacity(0.28))
@@ -2990,6 +3005,10 @@ struct LegacyContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedHours: Double = 24
 
+    private var versionedMotionProfile: VersionedMotionProfile {
+        VersionedMotionProfile(runtimeProfile: model.runtimeProfile)
+    }
+
     private var selectedRecords: [ProbeRecord] {
         model.chartData(hours: selectedHours, proxies: model.monitoredProxyNames, maxTotalPoints: 420, minimumPointsPerSeries: 160)
     }
@@ -3041,6 +3060,7 @@ struct LegacyContentView: View {
         }
         .frame(minWidth: 980, minHeight: 700)
         .legacyAppear(index: 0, distance: 8)
+        .legacyVersionedStartupMotion(profile: versionedMotionProfile)
     }
 
     private var legacySidebar: some View {
@@ -3057,19 +3077,19 @@ struct LegacyContentView: View {
             Button(model.isRunning ? model.t("停止监控") : model.t("开始监控")) {
                 model.isRunning ? model.stopMonitoring() : model.startMonitoring()
             }
-            .buttonStyle(LegacyButtonMotionStyle())
+            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
             Button(model.t("立即探测")) {
                 Task { await model.runProbe() }
             }
-            .buttonStyle(LegacyButtonMotionStyle())
+            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
             Button(model.t("刷新代理列表")) {
                 Task { await model.refreshProxyCatalog() }
             }
-            .buttonStyle(LegacyButtonMotionStyle())
+            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
             Button(model.t("删除历史数据")) {
                 model.clearHistory()
             }
-            .buttonStyle(LegacyButtonMotionStyle())
+            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
 
             Divider()
 

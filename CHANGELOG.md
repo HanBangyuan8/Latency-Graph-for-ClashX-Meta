@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.2.1 - 2026-04-16
+
+Patch release.
+
+- Added version-specific hand-written nonlinear motion profiles for macOS 10.15/11, macOS 12, macOS 13/14, and macOS 15+.
+- Tuned animation behavior separately for Apple Silicon and Intel Macs.
+- Added custom startup motion for modern and legacy runtime paths.
+- Added custom page switching motion without introducing new hover animations.
+- Added custom pressed-state motion for sidebar page selection and legacy controls.
+- Standardized component entrance timing within each page so cards, sections, and records enter at the same speed.
+- Reduced chart page-switch entrance strength for a calmer transition.
+- Reduced page transition travel distance to avoid overly strong chart movement.
+- Removed shaded area and dense bar rendering from the Overview combined latency chart so only meaningful multi-node trend lines remain.
+- Kept single-node charts unchanged so their existing filled visual style remains available.
+- Verified release build with `swift build -c release`.
+
 ## v1.2.0 - 2026-04-16
 
 Major compatibility and runtime optimization release.

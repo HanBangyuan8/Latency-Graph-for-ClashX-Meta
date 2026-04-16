@@ -13,6 +13,10 @@ struct VersionedMotionProfile {
         VersionedMotionProfile(runtimeProfile: .current, intensity: .enhanced)
     }
 
+    var disablesMotion: Bool {
+        intensity == .none
+    }
+
     var startupAnimation: Animation {
         switch (runtimeProfile.chipFamily, runtimeProfile.osFamily) {
         case (.appleSilicon, .macOS15OrNewer):
@@ -35,6 +39,9 @@ struct VersionedMotionProfile {
     }
 
     var pageSwitchAnimation: Animation {
+        if disablesMotion {
+            return .linear(duration: 0.001)
+        }
         if intensity == .reduced {
             return reducedPageSwitchAnimation
         }
@@ -339,6 +346,7 @@ struct VersionedStartupMotionModifier: ViewModifier {
     let delay: Double
 
     private var startupScale: CGFloat {
+        guard !profile.disablesMotion else { return 1 }
         switch phase {
         case .hidden: return profile.pageScale
         case .revealed: return 1.006
@@ -347,6 +355,7 @@ struct VersionedStartupMotionModifier: ViewModifier {
     }
 
     private var startupOffset: CGFloat {
+        guard !profile.disablesMotion else { return 0 }
         switch phase {
         case .hidden: return profile.startupOffset
         case .revealed: return -profile.startupOffset * 0.08
@@ -356,11 +365,15 @@ struct VersionedStartupMotionModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(reduceMotion ? 1 : phase.opacity)
-            .offset(y: reduceMotion ? 0 : startupOffset)
-            .scaleEffect(reduceMotion ? 1 : startupScale, anchor: .top)
+            .opacity(reduceMotion || profile.disablesMotion ? 1 : phase.opacity)
+            .offset(y: reduceMotion || profile.disablesMotion ? 0 : startupOffset)
+            .scaleEffect(reduceMotion || profile.disablesMotion ? 1 : startupScale, anchor: .top)
             .onAppear {
                 guard phase == .hidden else { return }
+                guard !profile.disablesMotion else {
+                    phase = .settled
+                    return
+                }
                 withAnimation(reduceMotion ? nil : profile.startupAnimation.delay(delay)) {
                     phase = .revealed
                 }
@@ -412,9 +425,9 @@ struct VersionedPageSwitchMotionModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(reduceMotion ? 1 : phase.opacity)
-            .offset(y: reduceMotion ? 0 : resolvedOffset)
-            .scaleEffect(reduceMotion ? 1 : resolvedScale, anchor: direction == .upward ? .top : .bottom)
+            .opacity(reduceMotion || profile.disablesMotion ? 1 : phase.opacity)
+            .offset(y: reduceMotion || profile.disablesMotion ? 0 : resolvedOffset)
+            .scaleEffect(reduceMotion || profile.disablesMotion ? 1 : resolvedScale, anchor: direction == .upward ? .top : .bottom)
             .onAppear {
                 restart()
             }
@@ -424,7 +437,7 @@ struct VersionedPageSwitchMotionModifier: ViewModifier {
     }
 
     private func restart() {
-        guard !reduceMotion else {
+        guard !reduceMotion, !profile.disablesMotion else {
             phase = .settled
             return
         }
@@ -470,9 +483,9 @@ struct VersionedComponentAppearModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(phase == .visible || reduceMotion ? 1 : 0)
-            .offset(y: phase == .visible || reduceMotion ? 0 : initialOffset)
-            .scaleEffect(phase == .visible || reduceMotion ? 1 : (isChart ? 0.998 : 0.996), anchor: .center)
+            .opacity(phase == .visible || reduceMotion || profile.disablesMotion ? 1 : 0)
+            .offset(y: phase == .visible || reduceMotion || profile.disablesMotion ? 0 : initialOffset)
+            .scaleEffect(phase == .visible || reduceMotion || profile.disablesMotion ? 1 : (isChart ? 0.998 : 0.996), anchor: .center)
             .onAppear {
                 restart()
             }
@@ -482,7 +495,7 @@ struct VersionedComponentAppearModifier: ViewModifier {
     }
 
     private func restart() {
-        guard !reduceMotion else {
+        guard !reduceMotion, !profile.disablesMotion else {
             phase = .visible
             return
         }
@@ -524,10 +537,10 @@ struct VersionedPagePressButtonStyle: ButtonStyle {
             .contentShape(Rectangle())
             .padding(.vertical, -8)
             .padding(.horizontal, -10)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? profile.tapScale : 1, anchor: .center)
+            .scaleEffect(configuration.isPressed && !reduceMotion && !profile.disablesMotion ? profile.tapScale : 1, anchor: .center)
             .opacity(configuration.isPressed ? 0.86 : 1)
-            .animation(reduceMotion ? nil : profile.pageTapAnimation, value: configuration.isPressed)
-            .animation(reduceMotion ? nil : profile.pageSwitchAnimation, value: isSelected)
+            .animation(reduceMotion || profile.disablesMotion ? nil : profile.pageTapAnimation, value: configuration.isPressed)
+            .animation(reduceMotion || profile.disablesMotion ? nil : profile.pageSwitchAnimation, value: isSelected)
     }
 }
 
@@ -538,10 +551,14 @@ struct LegacyVersionedStartupMotionModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : profile.startupOffset)
+            .opacity(isVisible || profile.disablesMotion ? 1 : 0)
+            .offset(y: isVisible || profile.disablesMotion ? 0 : profile.startupOffset)
             .onAppear {
                 guard !isVisible else { return }
+                guard !profile.disablesMotion else {
+                    isVisible = true
+                    return
+                }
                 withAnimation(profile.startupAnimation.delay(delay)) {
                     isVisible = true
                 }
@@ -554,9 +571,9 @@ struct LegacyVersionedPagePressButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? profile.tapScale : 1)
+            .scaleEffect(configuration.isPressed && !profile.disablesMotion ? profile.tapScale : 1)
             .opacity(configuration.isPressed ? 0.80 : 1)
-            .animation(profile.pageTapAnimation, value: configuration.isPressed)
+            .animation(profile.disablesMotion ? nil : profile.pageTapAnimation, value: configuration.isPressed)
     }
 }
 

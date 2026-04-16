@@ -102,6 +102,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 enum MotionIntensity: String, CaseIterable, Identifiable {
     case enhanced
     case reduced
+    case none
 
     var id: String { rawValue }
 }
@@ -175,7 +176,7 @@ enum L10n {
         "合并延迟曲线": "合併延遲曲線", "主要颜色": "主要顏色", "个手动节点": "個手動節點", "刷新代理目录失败": "重新整理代理目錄失敗",
         "已取消": "已取消", "检查更新": "檢查更新", "发现新版本 %@": "發現新版本 %@", "已经是最新版本": "已經是最新版本",
         "检查更新失败": "檢查更新失敗", "打开下载页": "打開下載頁", "每日自动检查": "每日自動檢查",
-        "Language": "語言", "动态效果": "動態效果", "增强": "增強", "减弱": "減弱", "Controller URL": "控制器 URL", "Secret": "密鑰",
+        "Language": "語言", "动态效果": "動態效果", "增强": "增強", "减弱": "減弱", "无动画": "無動畫", "Controller URL": "控制器 URL", "Secret": "密鑰",
         "连接与认证": "連線與認證", "监控节点": "監控節點", "探测参数": "探測參數"
     ]
     private static let english: [String: String] = [
@@ -195,7 +196,7 @@ enum L10n {
         "合并延迟曲线": "Combined Latency Chart", "主要颜色": "Accent Color", "个手动节点": "manual nodes", "刷新代理目录失败": "Failed to refresh proxy catalog",
         "已取消": "Cancelled", "检查更新": "Check for Updates", "发现新版本 %@": "New version available: %@", "已经是最新版本": "Already up to date",
         "检查更新失败": "Update check failed", "打开下载页": "Open Download Page", "每日自动检查": "Daily automatic check",
-        "Language": "Language", "动态效果": "Motion", "增强": "Enhanced", "减弱": "Reduced", "Controller URL": "Controller URL", "Secret": "Secret",
+        "Language": "Language", "动态效果": "Motion", "增强": "Enhanced", "减弱": "Reduced", "无动画": "Off", "Controller URL": "Controller URL", "Secret": "Secret",
         "连接与认证": "Connection & Auth", "监控节点": "Monitored Nodes", "探测参数": "Probe Settings"
     ]
 }
@@ -569,7 +570,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.2"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.3"
     }
 
     private func scheduleMonitoringLoop() {
@@ -1008,7 +1009,7 @@ struct ModernContentView: View {
     }
 
     private var interfaceAnimation: Animation? {
-        reduceMotion ? nil : versionedMotionProfile.pageSwitchAnimation
+        reduceMotion || model.motionIntensity == .none ? nil : versionedMotionProfile.pageSwitchAnimation
     }
 
     private var pageTransition: AnyTransition {
@@ -1148,6 +1149,7 @@ struct ModernContentView: View {
                 Picker("", selection: $model.motionIntensityID) {
                     Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
                     Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
+                    Text(model.t("无动画")).tag(MotionIntensity.none.rawValue)
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
@@ -1350,7 +1352,7 @@ struct NativeModernContentView: View {
     }
 
     private var interfaceAnimation: Animation? {
-        reduceMotion ? nil : versionedMotionProfile.pageSwitchAnimation
+        reduceMotion || model.motionIntensity == .none ? nil : versionedMotionProfile.pageSwitchAnimation
     }
 
     private var pageTransition: AnyTransition {
@@ -1397,6 +1399,7 @@ struct NativeModernContentView: View {
                     Picker("", selection: $model.motionIntensityID) {
                         Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
                         Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
+                        Text(model.t("无动画")).tag(MotionIntensity.none.rawValue)
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
@@ -3110,6 +3113,7 @@ struct LegacyContentView: View {
             Picker("", selection: $model.motionIntensityID) {
                 Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
                 Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
+                Text(model.t("无动画")).tag(MotionIntensity.none.rawValue)
             }
             .pickerStyle(SegmentedPickerStyle())
 

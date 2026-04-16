@@ -36,6 +36,7 @@ enum PageNavigationDirection {
 
     func transition(reduceMotion: Bool, intensity: MotionIntensity = .enhanced) -> AnyTransition {
         guard !reduceMotion else { return .opacity }
+        guard intensity != .none else { return .identity }
         let insertionAnchor: UnitPoint = insertionEdge == .bottom ? .bottom : .top
         let removalAnchor: UnitPoint = removalEdge == .bottom ? .bottom : .top
         let insertionDistance: CGFloat = intensity == .enhanced ? 180 : 18

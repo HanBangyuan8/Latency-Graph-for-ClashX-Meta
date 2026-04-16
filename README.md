@@ -44,7 +44,7 @@ A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latenc
 ### Before v1.2.0
 
 - Apple M chips
-- Runtime requirement: macOS 13+
+- Requirement: macOS 13+
 
 ## Build
 

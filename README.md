@@ -85,6 +85,6 @@ Release notes are maintained in `CHANGELOG.md`. The app runs on macOS 10.15+, bu
 
 MIT License. See [LICENSE](LICENSE).
 
-## Stargazers
+## Star History
 
-[![Stargazers over time](https://starchart.cc/HanBangyuan8/Latency-Graph-for-ClashX-Meta.svg?variant=adaptive)](https://starchart.cc/HanBangyuan8/Latency-Graph-for-ClashX-Meta)
+[![Star History Chart](https://api.star-history.com/svg?repos=HanBangyuan8/Latency-Graph-for-ClashX-Meta&type=Date)](https://star-history.com/#HanBangyuan8/Latency-Graph-for-ClashX-Meta&Date)

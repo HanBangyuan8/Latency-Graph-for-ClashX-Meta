@@ -87,4 +87,12 @@ MIT License. See [LICENSE](LICENSE).
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=HanBangyuan8/Latency-Graph-for-ClashX-Meta&type=Date)](https://star-history.com/#HanBangyuan8/Latency-Graph-for-ClashX-Meta&Date)
+<a href="https://www.star-history.com/?type=date&repos=HanBangyuan8%2FLatency-Graph-for-ClashX-Meta">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=HanBangyuan8/Latency-Graph-for-ClashX-Meta&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=HanBangyuan8/Latency-Graph-for-ClashX-Meta&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=HanBangyuan8/Latency-Graph-for-ClashX-Meta&type=date&legend=top-left" />
+ </picture>
+</a>
+
+

@@ -570,7 +570,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
     }
 
     private func scheduleMonitoringLoop() {
@@ -1620,7 +1620,7 @@ struct AccentColorPicker: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.fixed(22), spacing: 6), count: 8)
+        Array(repeating: GridItem(.flexible(minimum: 18), spacing: 8), count: 8)
     }
 
     var body: some View {
@@ -1633,7 +1633,8 @@ struct AccentColorPicker: View {
                 } label: {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(option.color)
-                        .frame(width: 22, height: 22)
+                        .aspectRatio(1, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
                         .overlay {
                             if model.accentColorID == option.id {
                                 RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -1649,6 +1650,7 @@ struct AccentColorPicker: View {
                         .accessibilityLabel(option.name(for: model.language))
                 }
                 .buttonStyle(LightweightPressButtonStyle())
+                .frame(maxWidth: .infinity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

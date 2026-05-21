@@ -2,11 +2,15 @@
 
 ## v1.4.0 - 2026-05-21
 
-- 外观优化。
+Major release.
+
+- Appearance improvements.
 
 ## v1.3.0 - 2026-05-21
 
-- 动画优化。
+Major release.
+
+- Animation improvements.
 
 ## v1.2.3 - 2026-04-16
 

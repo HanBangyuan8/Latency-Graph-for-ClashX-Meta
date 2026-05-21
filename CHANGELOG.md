@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.0 - 2026-05-21
+
+- 动画优化。
+
 ## v1.2.3 - 2026-04-16
 
 Patch and compatibility release.

@@ -29,7 +29,7 @@ struct RuntimeFeaturePlan {
     }
 
     var allowsSidebarCollapse: Bool {
-        profile.osFamily != .macOS1015Or11
+        profile.osFamily == .macOS13Or14 || profile.osFamily == .macOS15OrNewer
     }
 
     var usesAdvancedTransitions: Bool {

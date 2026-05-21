@@ -570,7 +570,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.3"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.0"
     }
 
     private func scheduleMonitoringLoop() {
@@ -779,6 +779,15 @@ private extension View {
     func hideAutomaticWindowToolbar() -> some View {
         if #available(macOS 13.0, *) {
             toolbar(.hidden, for: .windowToolbar)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func integratedWindowTitlebar(_ enabled: Bool) -> some View {
+        if enabled, #available(macOS 11.0, *) {
+            ignoresSafeArea(.container, edges: .top)
         } else {
             self
         }
@@ -1042,13 +1051,15 @@ struct ModernContentView: View {
     private var sidebarColumnWidth: CGFloat { 250 }
     private var titlebarContentHeight: CGFloat { 52 }
     private var collapsedTitleLeadingSpacer: CGFloat { 112 }
+    private var usesIntegratedTitlebar: Bool { model.runtimeProfile.osFamily == .macOS15OrNewer }
+    private var allowsSidebarCollapse: Bool { model.runtimePlan.allowsSidebarCollapse }
 
     var body: some View {
         HStack(spacing: 0) {
-            if isSidebarVisible {
+            if isSidebarVisible || !allowsSidebarCollapse {
                 sidebarShell
                     .frame(width: sidebarColumnWidth)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .transition(allowsSidebarCollapse ? .move(edge: .leading).combined(with: .opacity) : .identity)
 
                 Divider()
             }
@@ -1056,7 +1067,7 @@ struct ModernContentView: View {
             detailShell
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .ignoresSafeArea(.container, edges: .top)
+        .integratedWindowTitlebar(usesIntegratedTitlebar)
         .frame(minWidth: 1010, minHeight: 760)
         .compatibleTint(model.accentColor)
         .background(MacOS12StatusBarBridge(model: model).frame(width: 0, height: 0))
@@ -1070,18 +1081,22 @@ struct ModernContentView: View {
 
     private var sidebarShell: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Spacer()
-                sidebarToggleButton
-                Text(model.t("节点监控"))
-                    .font(.headline.weight(.semibold))
-                    .lineLimit(1)
-                Spacer()
-            }
-            .frame(height: titlebarContentHeight)
-            .background(sidebarBackground)
+            if usesIntegratedTitlebar {
+                HStack(spacing: 10) {
+                    Spacer()
+                    if allowsSidebarCollapse {
+                        sidebarToggleButton
+                    }
+                    Text(model.t("节点监控"))
+                        .font(.headline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .frame(height: titlebarContentHeight)
+                .background(sidebarBackground)
 
-            Divider()
+                Divider()
+            }
 
             sidebarContent
         }
@@ -1090,25 +1105,27 @@ struct ModernContentView: View {
 
     private var detailShell: some View {
         VStack(spacing: 0) {
-            HStack {
-                if !isSidebarVisible {
-                    Color.clear
-                        .frame(width: collapsedTitleLeadingSpacer)
-                    sidebarToggleButton
-                    Text(model.t("节点监控"))
-                        .font(.headline.weight(.semibold))
-                        .lineLimit(1)
-                } else {
+            if usesIntegratedTitlebar {
+                HStack {
+                    if !isSidebarVisible, allowsSidebarCollapse {
+                        Color.clear
+                            .frame(width: collapsedTitleLeadingSpacer)
+                        sidebarToggleButton
+                        Text(model.t("节点监控"))
+                            .font(.headline.weight(.semibold))
+                            .lineLimit(1)
+                    } else {
+                        Spacer()
+                    }
+
                     Spacer()
                 }
+                .padding(.horizontal, 14)
+                .frame(height: titlebarContentHeight)
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.96))
 
-                Spacer()
+                Divider()
             }
-            .padding(.horizontal, 14)
-            .frame(height: titlebarContentHeight)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.96))
-
-            Divider()
 
             detailContent
         }
@@ -1171,7 +1188,7 @@ struct ModernContentView: View {
                         }
                     }
                 }
-                .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "settings", accentColor: model.accentColor, profile: versionedMotionProfile))
+                .buttonStyle(.plain)
             }
 
             Section(model.t("控制")) {
@@ -1239,7 +1256,7 @@ struct ModernContentView: View {
                         }
                     }
                 }
-                .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "overview", accentColor: model.accentColor, profile: versionedMotionProfile))
+                .buttonStyle(.plain)
             }
 
             Section(model.t("节点分页")) {
@@ -1256,7 +1273,7 @@ struct ModernContentView: View {
                             }
                         }
                     }
-                    .buttonStyle(VersionedPagePressButtonStyle(isSelected: selectedSidebarPage == "node:\(proxy)", accentColor: model.accentColor, profile: versionedMotionProfile))
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -1335,7 +1352,6 @@ struct ModernContentView: View {
             }
         }
         .compatibleTint(model.accentColor)
-        .controlButtonHover(accentColor: model.accentColor)
     }
 }
 
@@ -1510,8 +1526,9 @@ struct NativeModernContentView: View {
                     }
                 }
             }
+            .listStyle(.sidebar)
             .navigationTitle("Latency Graph for ClashX Meta")
-            .navigationSplitViewColumnWidth(min: 245, ideal: 245, max: 330)
+            .navigationSplitViewColumnWidth(min: 272, ideal: 292, max: 340)
         } detail: {
             GeometryReader { geometry in
                 ScrollViewReader { scrollProxy in
@@ -1594,7 +1611,6 @@ struct NativeModernContentView: View {
             }
         }
         .tint(model.accentColor)
-        .controlButtonHover(accentColor: model.accentColor)
     }
 }
 
@@ -1603,8 +1619,12 @@ struct AccentColorPicker: View {
     @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.fixed(22), spacing: 6), count: 8)
+    }
+
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 8), spacing: 8) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
             ForEach(AccentColorOption.all) { option in
                 Button {
                     withAnimation(reduceMotion ? nil : MotionTokens.color) {
@@ -1613,7 +1633,7 @@ struct AccentColorPicker: View {
                 } label: {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(option.color)
-                        .frame(height: 20)
+                        .frame(width: 22, height: 22)
                         .overlay {
                             if model.accentColorID == option.id {
                                 RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -1631,6 +1651,7 @@ struct AccentColorPicker: View {
                 .buttonStyle(LightweightPressButtonStyle())
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1738,11 +1759,11 @@ struct NodePageView: View {
     private var headerCards: some View {
         let stats = model.stats(for: proxyName)
         return HStack(spacing: 12) {
-            StatCard(title: model.t("上次延迟"), value: stats.lastLatency.map { "\($0) ms" } ?? "--")
-            StatCard(title: model.t("24h 平均延迟"), value: stats.avgLatency24h.map { String(format: "%.1f ms", $0) } ?? "--")
-            StatCard(title: model.t("24h 最高延迟"), value: stats.maxLatency24h.map { "\($0) ms" } ?? "--")
-            StatCard(title: model.t("24h 丢包率"), value: String(format: "%.1f%%", stats.packetLoss24h * 100))
-            StatCard(title: model.t("24h 可用率"), value: String(format: "%.1f%%", stats.availability24h * 100))
+            StatCard(title: model.t("上次延迟"), value: stats.lastLatency.map { "\($0) ms" } ?? "--", compact: true)
+            StatCard(title: model.t("24h 平均延迟"), value: stats.avgLatency24h.map { String(format: "%.1f ms", $0) } ?? "--", compact: true)
+            StatCard(title: model.t("24h 最高延迟"), value: stats.maxLatency24h.map { "\($0) ms" } ?? "--", compact: true)
+            StatCard(title: model.t("24h 丢包率"), value: String(format: "%.1f%%", stats.packetLoss24h * 100), compact: true)
+            StatCard(title: model.t("24h 可用率"), value: String(format: "%.1f%%", stats.availability24h * 100), compact: true)
         }
     }
 
@@ -1864,11 +1885,11 @@ struct NodeStatsOverviewRow: View {
     private var statsCards: some View {
         let stats = model.stats(for: proxyName)
         return HStack(spacing: 12) {
-            StatCard(title: model.t("上次延迟"), value: stats.lastLatency.map { "\($0) ms" } ?? "--")
-            StatCard(title: model.t("24h 平均延迟"), value: stats.avgLatency24h.map { String(format: "%.1f ms", $0) } ?? "--")
-            StatCard(title: model.t("24h 最高延迟"), value: stats.maxLatency24h.map { "\($0) ms" } ?? "--")
-            StatCard(title: model.t("24h 丢包率"), value: String(format: "%.1f%%", stats.packetLoss24h * 100))
-            StatCard(title: model.t("24h 可用率"), value: String(format: "%.1f%%", stats.availability24h * 100))
+            StatCard(title: model.t("上次延迟"), value: stats.lastLatency.map { "\($0) ms" } ?? "--", compact: true)
+            StatCard(title: model.t("24h 平均延迟"), value: stats.avgLatency24h.map { String(format: "%.1f ms", $0) } ?? "--", compact: true)
+            StatCard(title: model.t("24h 最高延迟"), value: stats.maxLatency24h.map { "\($0) ms" } ?? "--", compact: true)
+            StatCard(title: model.t("24h 丢包率"), value: String(format: "%.1f%%", stats.packetLoss24h * 100), compact: true)
+            StatCard(title: model.t("24h 可用率"), value: String(format: "%.1f%%", stats.availability24h * 100), compact: true)
         }
     }
 }
@@ -2231,7 +2252,12 @@ struct LatencyChart: View {
     let color: Color
     var maxRenderedPoints: Int = 700
 
-    private var renderedRecords: [ProbeRecord] {
+    private func nativePointBudget(width: CGFloat) -> Int {
+        let widthBudget = max(220, Int(width * 0.46))
+        return min(maxRenderedPoints, widthBudget)
+    }
+
+    private func canvasRecords() -> [ProbeRecord] {
         ChartDownsampler.reduce(
             records,
             maxTotalPoints: maxRenderedPoints,
@@ -2239,18 +2265,30 @@ struct LatencyChart: View {
         )
     }
 
-    private var showsDenseBars: Bool {
-        renderedRecords.count <= 360
-    }
-
     var body: some View {
         if #available(macOS 13.0, *) {
-            ModernLatencyChart(records: renderedRecords, color: color, showsDenseBars: showsDenseBars)
+            GeometryReader { geometry in
+                let budget = nativePointBudget(width: geometry.size.width)
+                let renderedRecords = ChartDownsampler.reduce(
+                    records,
+                    maxTotalPoints: budget,
+                    minimumPointsPerSeries: budget
+                )
+                let showsDenseDecorations = renderedRecords.count <= 180
+
+                ModernLatencyChart(
+                    records: renderedRecords,
+                    color: color,
+                    showsDenseBars: showsDenseDecorations,
+                    showsArea: showsDenseDecorations
+                )
+            }
         } else {
+            let renderedRecords = canvasRecords()
             CanvasLatencyChart(
                 records: renderedRecords,
                 series: [ChartSeriesStyle(proxyName: nil, color: color)],
-                showsBars: showsDenseBars,
+                showsBars: renderedRecords.count <= 360,
                 showsAxes: true,
                 showsArea: true
             )
@@ -2286,8 +2324,10 @@ struct MultiLatencyChart: View {
     let records: [ProbeRecord]
     let proxyNames: [String]
 
-    private var showsDenseBars: Bool {
-        records.count <= 520
+    private func nativePerSeriesBudget(width: CGFloat) -> Int {
+        let seriesCount = max(proxyNames.count, 1)
+        let perSeriesWidth = width / CGFloat(seriesCount)
+        return max(120, min(320, Int(perSeriesWidth * 1.1)))
     }
 
     private func color(for proxyName: String) -> Color {
@@ -2300,7 +2340,15 @@ struct MultiLatencyChart: View {
 
     var body: some View {
         if #available(macOS 13.0, *) {
-            ModernMultiLatencyChart(records: records, proxyNames: proxyNames, showsDenseBars: showsDenseBars)
+            GeometryReader { geometry in
+                let perSeriesBudget = nativePerSeriesBudget(width: geometry.size.width)
+                let renderedRecords = ChartDownsampler.reduce(
+                    records,
+                    maxTotalPoints: perSeriesBudget * max(proxyNames.count, 1),
+                    minimumPointsPerSeries: perSeriesBudget
+                )
+                ModernMultiLatencyChart(records: renderedRecords, proxyNames: proxyNames)
+            }
         } else {
             CanvasLatencyChart(
                 records: records,
@@ -2538,6 +2586,7 @@ private struct ModernLatencyChart: View {
     let records: [ProbeRecord]
     let color: Color
     let showsDenseBars: Bool
+    let showsArea: Bool
     @State private var selectedDate: Date?
 
     var body: some View {
@@ -2553,17 +2602,19 @@ private struct ModernLatencyChart: View {
         Chart {
             ForEach(records) { point in
                 if let latency = point.latencyMs, point.success {
-                    AreaMark(
-                        x: .value("时间", point.timestamp),
-                        y: .value("延迟", latency)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [color.opacity(0.36), color.opacity(0.04)],
-                            startPoint: .top,
-                            endPoint: .bottom
+                    if showsArea {
+                        AreaMark(
+                            x: .value("时间", point.timestamp),
+                            y: .value("延迟", latency)
                         )
-                    )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [color.opacity(0.30), color.opacity(0.035)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    }
 
                     LineMark(
                         x: .value("时间", point.timestamp),
@@ -2658,7 +2709,6 @@ private struct ModernMenuLatencySparkline: View {
 private struct ModernMultiLatencyChart: View {
     let records: [ProbeRecord]
     let proxyNames: [String]
-    let showsDenseBars: Bool
     @State private var selectedDate: Date?
 
     private func color(for proxyName: String) -> Color {
@@ -2736,20 +2786,20 @@ private struct ModernMultiLatencyChart: View {
 struct StatCard: View {
     let title: String
     let value: String
+    var compact: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 8) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font((compact ? Font.footnote : Font.subheadline).weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 23, weight: .bold, design: .rounded))
+                .font(.system(size: compact ? 20 : 23, weight: .bold, design: .rounded))
                 .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(compact ? 14 : 18)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .interactivePanel(accentColor: .secondary)
         .gentleAppear()
     }
 }
@@ -2940,15 +2990,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environmentObject(model)
 
         let hostingController = NSHostingController(rootView: rootView)
+        let usesIntegratedTitlebar = RuntimeFeaturePlan.current.usesSwiftUIAppLifecycle
+        let styleMask: NSWindow.StyleMask = usesIntegratedTitlebar
+            ? [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            : [.titled, .closable, .miniaturizable, .resizable]
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1180, height: 820),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            styleMask: styleMask,
             backing: .buffered,
             defer: false
         )
         window.title = "Latency Graph for ClashX Meta"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
+        window.titleVisibility = usesIntegratedTitlebar ? .hidden : .visible
+        window.titlebarAppearsTransparent = usesIntegratedTitlebar
         if #available(macOS 11.0, *) {
             window.toolbarStyle = .unified
         }

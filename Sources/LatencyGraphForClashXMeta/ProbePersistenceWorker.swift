@@ -20,4 +20,9 @@ actor ProbePersistenceWorker {
             store.save(records: records)
         }
     }
+
+    func append(records: [ProbeRecord], retentionDays: Int) {
+        guard !records.isEmpty else { return }
+        store.append(records: records, retentionDays: retentionDays)
+    }
 }

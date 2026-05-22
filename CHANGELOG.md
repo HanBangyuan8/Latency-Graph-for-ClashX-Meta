@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.5.0 - 2026-05-22
+
+Major release.
+
+- Frontend optimization.
+- Backend optimization.
+- Use Charts.
+- Animation optimization.
+- Database optimization.
+- Rendering optimization.
+
 ## v1.4.0 - 2026-05-21
 
 Major release.

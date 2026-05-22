@@ -219,7 +219,7 @@ final class AppModel: ObservableObject {
     @Published var motionIntensityID: String { didSet { UserDefaults.standard.set(motionIntensityID, forKey: "motionIntensityID") } }
     @Published var lastUpdateCheckAt: Double { didSet { UserDefaults.standard.set(lastUpdateCheckAt, forKey: "lastUpdateCheckAt") } }
 
-    @Published var records: [ProbeRecord] = []
+    @Published private(set) var recordsRevision = 0
     @Published var isRunning = false
     @Published var latestError: String?
     @Published var updateStatus: String?
@@ -237,6 +237,10 @@ final class AppModel: ObservableObject {
     private let client = ClashAPIClient()
     private let updateService = GitHubReleaseUpdateService(owner: "HanBangyuan8", repo: "Latency-Graph-for-ClashX-Meta")
     private let manualProxySeparator = "\n"
+    private(set) var records: [ProbeRecord] = []
+    private var recordIndex = ProbeRecordIndex(records: [])
+    private var statsCache: [ProbeStatsCacheKey: StatsSummary] = [:]
+    private var chartCache: [ProbeChartCacheKey: [ProbeRecord]] = [:]
     let runtimePlan = RuntimeFeaturePlan.current
 
     var runtimeProfile: RuntimeOptimizationProfile {
@@ -295,7 +299,9 @@ final class AppModel: ObservableObject {
         self.motionIntensityID = defaults.string(forKey: "motionIntensityID") ?? MotionIntensity.enhanced.rawValue
         self.lastUpdateCheckAt = defaults.object(forKey: "lastUpdateCheckAt") as? Double ?? 0
         normalizeStoredChoices()
-        self.records = store.loadRecords()
+        let loadedRecords = store.loadRecords()
+        self.records = loadedRecords
+        self.recordIndex = ProbeRecordIndex(records: loadedRecords)
         self.resolvedProxyName = proxyName
         self.monitoredProxyNames = selectedManualProxyNames.isEmpty ? [proxyName] : selectedManualProxyNames
         Task {
@@ -336,6 +342,8 @@ final class AppModel: ObservableObject {
 
     func clearHistory() {
         records.removeAll()
+        recordIndex.replace(with: records)
+        invalidateRecordDerivedState()
         persistRecords(immediate: true)
     }
 
@@ -453,29 +461,17 @@ final class AppModel: ObservableObject {
     }
 
     func stats(for proxies: [String]?) -> StatsSummary {
-        let proxySet = proxies.map(Set.init)
-        let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
-        let filtered = records.filter {
-            $0.timestamp >= cutoff && (proxySet == nil || proxySet!.contains($0.proxyName))
-        }
-        let successes = filtered.filter(\.success)
-        let failures = filtered.filter { !$0.success }
-        let latencies = successes.compactMap(\.latencyMs)
-        let average = latencies.isEmpty ? nil : Double(latencies.reduce(0, +)) / Double(latencies.count)
-        let maxLatency = latencies.max()
-        let availability = filtered.isEmpty ? 0 : Double(successes.count) / Double(filtered.count)
-        let packetLoss = filtered.isEmpty ? 0 : Double(failures.count) / Double(filtered.count)
-        let lastLatency = (proxySet == nil ? records : records.filter { proxySet!.contains($0.proxyName) }).last?.latencyMs
-
-        return StatsSummary(
-            lastLatency: lastLatency,
-            avgLatency24h: average,
-            maxLatency24h: maxLatency,
-            availability24h: availability,
-            packetLoss24h: packetLoss,
-            totalSamples24h: filtered.count,
-            failureCount24h: failures.count
+        let key = ProbeStatsCacheKey(
+            proxies: normalizedProxyKey(proxies),
+            minuteBucket: currentMinuteBucket()
         )
+        if let cached = statsCache[key] {
+            return cached
+        }
+
+        let summary = recordIndex.stats(for: proxies)
+        statsCache[key] = summary
+        return summary
     }
 
     func chartData(
@@ -498,13 +494,30 @@ final class AppModel: ObservableObject {
         maxTotalPoints: Int? = nil,
         minimumPointsPerSeries: Int = 220
     ) -> [ProbeRecord] {
-        let proxySet = proxies.map(Set.init)
-        let cutoff = Date().addingTimeInterval(-(hours * 60 * 60))
-        let filtered = records.filter {
-            $0.timestamp >= cutoff && (proxySet == nil || proxySet!.contains($0.proxyName))
-        }
         let maxPoints = maxTotalPoints ?? defaultChartPointBudget(hours: hours)
-        return ChartDownsampler.reduce(filtered, maxTotalPoints: maxPoints, minimumPointsPerSeries: minimumPointsPerSeries)
+        let key = ProbeChartCacheKey(
+            hours: hours,
+            proxies: normalizedProxyKey(proxies),
+            maxTotalPoints: maxPoints,
+            minimumPointsPerSeries: minimumPointsPerSeries,
+            minuteBucket: currentMinuteBucket()
+        )
+        if let cached = chartCache[key] {
+            return cached
+        }
+
+        let data = recordIndex.chartData(
+            hours: hours,
+            proxies: proxies,
+            maxTotalPoints: maxPoints,
+            minimumPointsPerSeries: minimumPointsPerSeries
+        )
+        chartCache[key] = data
+        return data
+    }
+
+    func recentRecords(for proxy: String? = nil, limit: Int) -> [ProbeRecord] {
+        recordIndex.recentRecords(for: proxy, limit: limit)
     }
 
     func nodeChartPointBudget(hours: Double) -> Int {
@@ -570,7 +583,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0"
     }
 
     private func scheduleMonitoringLoop() {
@@ -610,9 +623,35 @@ final class AppModel: ObservableObject {
 
     private func append(_ newRecords: [ProbeRecord]) {
         guard !newRecords.isEmpty else { return }
-        records.append(contentsOf: newRecords)
-        records = RecordRetentionPolicy(retentionDays: runtimePlan.retentionDays).trim(records)
-        persistRecords()
+        records = recordIndex.appending(
+            newRecords,
+            to: records,
+            retentionDays: runtimePlan.retentionDays
+        )
+        invalidateRecordDerivedState()
+        persistNewRecords(newRecords)
+    }
+
+    private func invalidateRecordDerivedState() {
+        statsCache.removeAll(keepingCapacity: true)
+        chartCache.removeAll(keepingCapacity: true)
+        recordsRevision += 1
+    }
+
+    private func persistNewRecords(_ newRecords: [ProbeRecord]) {
+        let retentionDays = runtimePlan.retentionDays
+        Task {
+            await persistenceWorker.append(records: newRecords, retentionDays: retentionDays)
+        }
+    }
+
+    private func normalizedProxyKey(_ proxies: [String]?) -> [String]? {
+        guard let proxies, !proxies.isEmpty else { return nil }
+        return Array(Set(proxies)).sorted()
+    }
+
+    private func currentMinuteBucket() -> Int {
+        Int(Date().timeIntervalSince1970 / 60)
     }
 
     private func persistRecords(immediate: Bool = false) {
@@ -679,9 +718,19 @@ enum AppError: LocalizedError {
 }
 
 struct ClashAPIClient {
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.httpMaximumConnectionsPerHost = 6
+        configuration.timeoutIntervalForRequest = 12
+        configuration.timeoutIntervalForResource = 18
+        return URLSession(configuration: configuration)
+    }()
+
     func fetchProxies(baseURLString: String, secret: String) async throws -> Data {
         let request = try makeRequest(baseURLString: baseURLString, path: "/proxies", secret: secret)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.session.data(for: request)
         try validate(response)
         return data
     }
@@ -704,13 +753,14 @@ struct ClashAPIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = max(5, Double(timeoutMs) / 1000.0 + 2)
         let trimmedSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedSecret.isEmpty {
             request.setValue("Bearer \(trimmedSecret)", forHTTPHeaderField: "Authorization")
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.session.data(for: request)
         try validate(response)
         let decoded = try JSONDecoder().decode(DelayResponse.self, from: data)
         return decoded.delay
@@ -722,6 +772,7 @@ struct ClashAPIClient {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 10
         let trimmedSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedSecret.isEmpty {
@@ -827,6 +878,18 @@ struct ProbeStore {
         }
     }
 
+    func append(records: [ProbeRecord], retentionDays: Int) {
+        guard !records.isEmpty else { return }
+        do {
+            let db = try openDatabase()
+            defer { sqlite3_close(db) }
+            try createSchema(in: db)
+            try appendRecords(records, retentionDays: retentionDays, in: db)
+        } catch {
+            print("append error: \(error)")
+        }
+    }
+
     private func openDatabase() throws -> OpaquePointer? {
         let url = try databaseURL()
         var db: OpaquePointer?
@@ -910,6 +973,34 @@ struct ProbeStore {
         } catch {
             try? execute("ROLLBACK;", in: db)
             throw error
+        }
+    }
+
+    private func appendRecords(_ records: [ProbeRecord], retentionDays: Int, in db: OpaquePointer?) throws {
+        let cutoff = Date().addingTimeInterval(-TimeInterval(retentionDays) * 24 * 60 * 60).timeIntervalSince1970
+        try execute("BEGIN TRANSACTION;", in: db)
+        do {
+            for record in records {
+                try insert(record, into: db)
+            }
+            try deleteRecords(before: cutoff, in: db)
+            try execute("COMMIT;", in: db)
+        } catch {
+            try? execute("ROLLBACK;", in: db)
+            throw error
+        }
+    }
+
+    private func deleteRecords(before cutoff: TimeInterval, in db: OpaquePointer?) throws {
+        let sql = "DELETE FROM probe_records WHERE timestamp < ?;"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw sqliteError(db)
+        }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_double(statement, 1, cutoff)
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw sqliteError(db)
         }
     }
 
@@ -1784,7 +1875,11 @@ struct NodePageView: View {
                 TimeRangePicker(selectedHours: $selectedHours, model: model)
             }
 
-            LatencyChart(records: records, color: model.accentColor, maxRenderedPoints: model.nodeChartPointBudget(hours: selectedHours))
+            LatencyChart(
+                records: records,
+                color: model.accentColor,
+                maxRenderedPoints: model.nodeChartPointBudget(hours: selectedHours)
+            )
                 .frame(height: 320)
                 .padding(12)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -1799,7 +1894,7 @@ struct NodePageView: View {
 
     private var latestRecordsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            let pageRecords = model.records.filter { $0.proxyName == proxyName }
+            let pageRecords = model.recentRecords(for: proxyName, limit: 100)
 
             HStack {
                 Text(model.t("最近记录"))
@@ -1811,7 +1906,7 @@ struct NodePageView: View {
                 .buttonStyle(.bordered)
             }
 
-            Table(pageRecords.suffix(100).reversed()) {
+            Table(pageRecords) {
                 TableColumn(model.t("时间")) { record in
                     Text(record.timestamp, format: .dateTime.month().day().hour().minute().second())
                 }
@@ -2259,14 +2354,6 @@ struct LatencyChart: View {
         return min(maxRenderedPoints, widthBudget)
     }
 
-    private func canvasRecords() -> [ProbeRecord] {
-        ChartDownsampler.reduce(
-            records,
-            maxTotalPoints: maxRenderedPoints,
-            minimumPointsPerSeries: maxRenderedPoints
-        )
-    }
-
     var body: some View {
         if #available(macOS 13.0, *) {
             GeometryReader { geometry in
@@ -2286,8 +2373,12 @@ struct LatencyChart: View {
                 )
             }
         } else {
-            let renderedRecords = canvasRecords()
-            CanvasLatencyChart(
+            let renderedRecords = ChartDownsampler.reduce(
+                records,
+                maxTotalPoints: maxRenderedPoints,
+                minimumPointsPerSeries: maxRenderedPoints
+            )
+            PathLatencyChart(
                 records: renderedRecords,
                 series: [ChartSeriesStyle(proxyName: nil, color: color)],
                 showsBars: renderedRecords.count <= 360,
@@ -2296,6 +2387,7 @@ struct LatencyChart: View {
             )
         }
     }
+
 }
 
 @available(macOS 12.0, *)
@@ -2308,7 +2400,7 @@ struct MenuLatencySparkline: View {
             if #available(macOS 13.0, *) {
                 ModernMenuLatencySparkline(records: records, color: color)
             } else {
-                CanvasLatencyChart(
+                PathLatencyChart(
                     records: records,
                     series: [ChartSeriesStyle(proxyName: nil, color: color)],
                     showsBars: records.count <= 160,
@@ -2352,7 +2444,7 @@ struct MultiLatencyChart: View {
                 ModernMultiLatencyChart(records: renderedRecords, proxyNames: proxyNames)
             }
         } else {
-            CanvasLatencyChart(
+            PathLatencyChart(
                 records: records,
                 series: proxyNames.map { ChartSeriesStyle(proxyName: $0, color: color(for: $0)) },
                 showsBars: false,
@@ -2361,17 +2453,78 @@ struct MultiLatencyChart: View {
             )
         }
     }
+
 }
 
-@available(macOS 12.0, *)
-private struct ChartSeriesStyle: Hashable {
+private struct ChartSeriesStyle: Identifiable {
+    let id: String
     let proxyName: String?
     let color: Color
+
+    init(proxyName: String?, color: Color) {
+        self.id = proxyName ?? "__single_series"
+        self.proxyName = proxyName
+        self.color = color
+    }
 }
 
-@available(macOS 12.0, *)
-private struct CanvasLatencyChart: View {
-    let records: [ProbeRecord]
+private struct PathLatencyChartMetrics {
+    let successfulRecords: [ProbeRecord]
+    let successfulRecordsByProxy: [String: [ProbeRecord]]
+    let failureRecords: [ProbeRecord]
+    let timeRange: ClosedRange<Date>?
+    let yAxisMax: Int
+
+    init(records: [ProbeRecord]) {
+        var successes: [ProbeRecord] = []
+        var failures: [ProbeRecord] = []
+        var minTimestamp: Date?
+        var maxTimestamp: Date?
+        var maxLatency = 1
+
+        successes.reserveCapacity(records.count)
+        failures.reserveCapacity(records.count / 8)
+
+        for record in records {
+            minTimestamp = minTimestamp.map { min($0, record.timestamp) } ?? record.timestamp
+            maxTimestamp = maxTimestamp.map { max($0, record.timestamp) } ?? record.timestamp
+
+            if record.success, let latency = record.latencyMs {
+                successes.append(record)
+                maxLatency = max(maxLatency, latency)
+            } else if !record.success {
+                failures.append(record)
+            }
+        }
+
+        let sortedSuccesses = successes.sorted { $0.timestamp < $1.timestamp }
+        self.successfulRecords = sortedSuccesses
+        self.successfulRecordsByProxy = Dictionary(grouping: sortedSuccesses, by: \.proxyName)
+        self.failureRecords = failures
+        self.yAxisMax = Self.roundedYAxisMax(for: maxLatency)
+
+        if let minTimestamp, let maxTimestamp {
+            self.timeRange = minTimestamp == maxTimestamp
+                ? minTimestamp.addingTimeInterval(-30) ... maxTimestamp.addingTimeInterval(30)
+                : minTimestamp ... maxTimestamp
+        } else {
+            self.timeRange = nil
+        }
+    }
+
+    private static func roundedYAxisMax(for raw: Int) -> Int {
+        if raw <= 60 { return 60 }
+        if raw <= 150 { return 150 }
+        if raw <= 300 { return 300 }
+        if raw <= 600 { return 600 }
+        if raw <= 900 { return 900 }
+        let rounded = Int(ceil(Double(raw) / 500.0) * 500.0)
+        return max(rounded, raw)
+    }
+}
+
+private struct PathLatencyChart: View {
+    private let metrics: PathLatencyChartMetrics
     let series: [ChartSeriesStyle]
     let showsBars: Bool
     let showsAxes: Bool
@@ -2382,33 +2535,18 @@ private struct CanvasLatencyChart: View {
     private let topPadding: CGFloat = 8
     private let rightPadding: CGFloat = 8
 
-    private var successfulRecords: [ProbeRecord] {
-        records.filter { $0.success && $0.latencyMs != nil }
-    }
+    private static let axisDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d HH:mm"
+        return formatter
+    }()
 
-    private var maxLatency: Int {
-        max(1, successfulRecords.compactMap(\.latencyMs).max() ?? 1)
-    }
-
-    private var yAxisMax: Int {
-        let raw = maxLatency
-        if raw <= 60 { return 60 }
-        if raw <= 150 { return 150 }
-        if raw <= 300 { return 300 }
-        if raw <= 600 { return 600 }
-        if raw <= 900 { return 900 }
-        let rounded = Int(ceil(Double(raw) / 500.0) * 500.0)
-        return max(rounded, raw)
-    }
-
-    private var timeRange: ClosedRange<Date>? {
-        guard let first = records.map(\.timestamp).min(),
-              let last = records.map(\.timestamp).max()
-        else { return nil }
-        if first == last {
-            return first.addingTimeInterval(-30) ... last.addingTimeInterval(30)
-        }
-        return first ... last
+    init(records: [ProbeRecord], series: [ChartSeriesStyle], showsBars: Bool, showsAxes: Bool, showsArea: Bool) {
+        self.metrics = PathLatencyChartMetrics(records: records)
+        self.series = series
+        self.showsBars = showsBars
+        self.showsAxes = showsAxes
+        self.showsArea = showsArea
     }
 
     var body: some View {
@@ -2421,154 +2559,158 @@ private struct CanvasLatencyChart: View {
             )
 
             ZStack(alignment: .topLeading) {
-                Canvas { context, size in
-                    drawGrid(context: &context, plotRect: plotRect)
-                    drawSeries(context: &context, plotRect: plotRect)
-                    drawFailures(context: &context, plotRect: plotRect)
+                gridPath(in: plotRect)
+                    .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+
+                baselinePath(in: plotRect)
+                    .stroke(Color.secondary.opacity(0.28), lineWidth: 1)
+
+                ForEach(effectiveSeries) { style in
+                    let points = coordinates(for: style, in: plotRect, metrics: metrics)
+
+                    if showsArea {
+                        areaPath(points: points, plotRect: plotRect)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [style.color.opacity(0.28), style.color.opacity(0.035)]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    }
+
+                    if showsBars {
+                        barsPath(points: points, plotRect: plotRect)
+                            .stroke(style.color.opacity(0.22), lineWidth: 2)
+                    }
+
+                    linePath(points: points)
+                        .stroke(style.color, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
                 }
+
+                failuresPath(in: plotRect, metrics: metrics)
+                    .stroke(Color.red.opacity(0.36), lineWidth: 1.2)
 
                 if showsAxes {
-                    axisOverlay(plotRect: plotRect)
+                    axisOverlay(plotRect: plotRect, metrics: metrics)
                 }
             }
         }
     }
 
-    private func drawGrid(context: inout GraphicsContext, plotRect: CGRect) {
-        let horizontalLines = 3
-        for index in 0 ... horizontalLines {
-            let progress = CGFloat(index) / CGFloat(horizontalLines)
-            let y = plotRect.maxY - plotRect.height * progress
-            var path = Path()
-            path.move(to: CGPoint(x: plotRect.minX, y: y))
-            path.addLine(to: CGPoint(x: plotRect.maxX, y: y))
-            context.stroke(path, with: .color(.secondary.opacity(index == 0 ? 0.28 : 0.18)), lineWidth: 1)
-        }
-
-        let verticalLines = 6
-        for index in 0 ... verticalLines {
-            let progress = CGFloat(index) / CGFloat(verticalLines)
-            let x = plotRect.minX + plotRect.width * progress
-            var path = Path()
-            path.move(to: CGPoint(x: x, y: plotRect.minY))
-            path.addLine(to: CGPoint(x: x, y: plotRect.maxY))
-            context.stroke(path, with: .color(.secondary.opacity(0.14)), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
-        }
+    private var effectiveSeries: [ChartSeriesStyle] {
+        series.isEmpty ? [ChartSeriesStyle(proxyName: nil, color: .purple)] : series
     }
 
-    private func drawSeries(context: inout GraphicsContext, plotRect: CGRect) {
-        guard let timeRange else { return }
-        let grouped = Dictionary(grouping: successfulRecords, by: \.proxyName)
-        let effectiveSeries = series.isEmpty ? [ChartSeriesStyle(proxyName: nil, color: .purple)] : series
-
-        for style in effectiveSeries {
-            let points: [ProbeRecord]
-            if let proxyName = style.proxyName {
-                points = grouped[proxyName, default: []].sorted { $0.timestamp < $1.timestamp }
-            } else {
-                points = successfulRecords.sorted { $0.timestamp < $1.timestamp }
-            }
-            guard points.count >= 1 else { continue }
-
-            let coordinates = points.compactMap { point -> CGPoint? in
-                guard let latency = point.latencyMs else { return nil }
-                return coordinate(for: point.timestamp, latency: latency, in: plotRect, timeRange: timeRange)
-            }
-
-            guard !coordinates.isEmpty else { continue }
-
-            if showsBars {
-                drawBars(points: coordinates, color: style.color, context: &context, plotRect: plotRect)
-            }
-
-            if showsArea {
-                drawArea(points: coordinates, color: style.color, context: &context, plotRect: plotRect)
-            }
-            drawLine(points: coordinates, color: style.color, context: &context)
+    private func records(for style: ChartSeriesStyle, metrics: PathLatencyChartMetrics) -> [ProbeRecord] {
+        if let proxyName = style.proxyName {
+            return metrics.successfulRecordsByProxy[proxyName, default: []]
         }
+        return metrics.successfulRecords
     }
 
-    private func drawBars(points: [CGPoint], color: Color, context: inout GraphicsContext, plotRect: CGRect) {
-        for point in points {
-            var path = Path()
-            path.move(to: CGPoint(x: point.x, y: plotRect.maxY))
-            path.addLine(to: point)
-            context.stroke(path, with: .color(color.opacity(0.22)), lineWidth: 2)
-        }
-    }
-
-    private func drawArea(points: [CGPoint], color: Color, context: inout GraphicsContext, plotRect: CGRect) {
-        guard points.count >= 2, let first = points.first, let last = points.last else { return }
-        var area = Path()
-        area.move(to: CGPoint(x: first.x, y: plotRect.maxY))
-        area.addLine(to: first)
-        for point in points.dropFirst() {
-            area.addLine(to: point)
-        }
-        area.addLine(to: CGPoint(x: last.x, y: plotRect.maxY))
-        area.closeSubpath()
-        context.fill(
-            area,
-            with: .linearGradient(
-                Gradient(colors: [color.opacity(0.28), color.opacity(0.035)]),
-                startPoint: CGPoint(x: plotRect.midX, y: plotRect.minY),
-                endPoint: CGPoint(x: plotRect.midX, y: plotRect.maxY)
+    private func coordinates(for style: ChartSeriesStyle, in plotRect: CGRect, metrics: PathLatencyChartMetrics) -> [CGPoint] {
+        guard let timeRange = metrics.timeRange else { return [] }
+        return records(for: style, metrics: metrics).compactMap { record in
+            guard let latency = record.latencyMs else { return nil }
+            return CGPoint(
+                x: xPosition(for: record.timestamp, in: plotRect, timeRange: timeRange),
+                y: yPosition(for: latency, in: plotRect, yAxisMax: metrics.yAxisMax)
             )
-        )
-    }
-
-    private func drawLine(points: [CGPoint], color: Color, context: inout GraphicsContext) {
-        guard let first = points.first else { return }
-        var line = Path()
-        line.move(to: first)
-        for point in points.dropFirst() {
-            line.addLine(to: point)
-        }
-        context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
-    }
-
-    private func drawFailures(context: inout GraphicsContext, plotRect: CGRect) {
-        guard let timeRange else { return }
-        for record in records where !record.success {
-            let x = xPosition(for: record.timestamp, in: plotRect, timeRange: timeRange)
-            var path = Path()
-            path.move(to: CGPoint(x: x, y: plotRect.minY))
-            path.addLine(to: CGPoint(x: x, y: plotRect.maxY))
-            context.stroke(path, with: .color(.red.opacity(0.36)), lineWidth: 1.2)
         }
     }
 
-    private func axisOverlay(plotRect: CGRect) -> some View {
+    private func gridPath(in plotRect: CGRect) -> Path {
+        Path { path in
+            for index in 1 ... 3 {
+                let progress = CGFloat(index) / 3
+                let y = plotRect.maxY - plotRect.height * progress
+                path.move(to: CGPoint(x: plotRect.minX, y: y))
+                path.addLine(to: CGPoint(x: plotRect.maxX, y: y))
+            }
+
+            for index in 0 ... 6 {
+                let progress = CGFloat(index) / 6
+                let x = plotRect.minX + plotRect.width * progress
+                path.move(to: CGPoint(x: x, y: plotRect.minY))
+                path.addLine(to: CGPoint(x: x, y: plotRect.maxY))
+            }
+        }
+    }
+
+    private func baselinePath(in plotRect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: plotRect.minX, y: plotRect.maxY))
+            path.addLine(to: CGPoint(x: plotRect.maxX, y: plotRect.maxY))
+        }
+    }
+
+    private func barsPath(points: [CGPoint], plotRect: CGRect) -> Path {
+        Path { path in
+            for point in points {
+                path.move(to: CGPoint(x: point.x, y: plotRect.maxY))
+                path.addLine(to: point)
+            }
+        }
+    }
+
+    private func areaPath(points: [CGPoint], plotRect: CGRect) -> Path {
+        Path { path in
+            guard points.count >= 2, let first = points.first, let last = points.last else { return }
+            path.move(to: CGPoint(x: first.x, y: plotRect.maxY))
+            path.addLine(to: first)
+            for point in points.dropFirst() {
+                path.addLine(to: point)
+            }
+            path.addLine(to: CGPoint(x: last.x, y: plotRect.maxY))
+            path.closeSubpath()
+        }
+    }
+
+    private func linePath(points: [CGPoint]) -> Path {
+        Path { path in
+            guard let first = points.first else { return }
+            path.move(to: first)
+            for point in points.dropFirst() {
+                path.addLine(to: point)
+            }
+        }
+    }
+
+    private func failuresPath(in plotRect: CGRect, metrics: PathLatencyChartMetrics) -> Path {
+        Path { path in
+            guard let timeRange = metrics.timeRange else { return }
+            for record in metrics.failureRecords {
+                let x = xPosition(for: record.timestamp, in: plotRect, timeRange: timeRange)
+                path.move(to: CGPoint(x: x, y: plotRect.minY))
+                path.addLine(to: CGPoint(x: x, y: plotRect.maxY))
+            }
+        }
+    }
+
+    private func axisOverlay(plotRect: CGRect, metrics: PathLatencyChartMetrics) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(0 ... 3, id: \.self) { index in
                 let progress = CGFloat(index) / 3
-                let value = Int(round(Double(yAxisMax) * Double(progress)))
+                let value = Int(round(Double(metrics.yAxisMax) * Double(progress)))
                 Text("\(value)ms")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                    .foregroundColor(.secondary)
                     .position(x: leftAxisWidth / 2, y: plotRect.maxY - plotRect.height * progress)
             }
 
-            if let timeRange {
+            if let timeRange = metrics.timeRange {
                 ForEach(0 ... 3, id: \.self) { index in
                     let progress = Double(index) / 3.0
                     let date = timeRange.lowerBound.addingTimeInterval(timeRange.upperBound.timeIntervalSince(timeRange.lowerBound) * progress)
-                    Text(date, format: .dateTime.month().day().hour().minute())
+                    Text(Self.axisDateFormatter.string(from: date))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                         .lineLimit(1)
                         .position(x: plotRect.minX + plotRect.width * CGFloat(progress), y: plotRect.maxY + 18)
                 }
             }
         }
-    }
-
-    private func coordinate(for date: Date, latency: Int, in plotRect: CGRect, timeRange: ClosedRange<Date>) -> CGPoint {
-        CGPoint(
-            x: xPosition(for: date, in: plotRect, timeRange: timeRange),
-            y: yPosition(for: latency, in: plotRect)
-        )
     }
 
     private func xPosition(for date: Date, in plotRect: CGRect, timeRange: ClosedRange<Date>) -> CGFloat {
@@ -2577,7 +2719,7 @@ private struct CanvasLatencyChart: View {
         return plotRect.minX + plotRect.width * CGFloat(min(1, max(0, progress)))
     }
 
-    private func yPosition(for latency: Int, in plotRect: CGRect) -> CGFloat {
+    private func yPosition(for latency: Int, in plotRect: CGRect, yAxisMax: Int) -> CGFloat {
         let progress = CGFloat(min(1, max(0, Double(latency) / Double(max(yAxisMax, 1)))))
         return plotRect.maxY - plotRect.height * progress
     }
@@ -2818,7 +2960,7 @@ struct MenuBarPanel: View {
     var body: some View {
         let menuProxyName = model.monitoredProxyNames.first ?? "DIRECT"
         let stats = model.stats(for: menuProxyName)
-        let records = model.chartData(hours: 4, proxy: menuProxyName)
+        let records = model.chartData(hours: 4, proxy: menuProxyName, maxTotalPoints: 180, minimumPointsPerSeries: 180)
 
         VStack(alignment: .leading, spacing: 10) {
             Text(menuProxyName)
@@ -2867,7 +3009,7 @@ struct MenuBarPanel: View {
         .padding(14)
         .frame(width: 320)
         .compatibleTint(model.accentColor)
-        .animation(panelAnimation, value: model.records.count)
+        .animation(panelAnimation, value: model.recordsRevision)
     }
 }
 
@@ -2907,8 +3049,10 @@ final class StatusBarController: NSObject {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private weak var model: AppModel?
+    private var lastRenderedTitle = ""
 
     func configure(model: AppModel) {
+        let modelChanged = self.model !== model
         self.model = model
 
         if statusItem == nil {
@@ -2927,17 +3071,22 @@ final class StatusBarController: NSObject {
             self.popover = popover
         }
 
-        popover?.contentViewController = NSHostingController(
-            rootView: MenuBarPanel()
-                .environmentObject(model)
-        )
+        if modelChanged || popover?.contentViewController == nil {
+            popover?.contentViewController = NSHostingController(
+                rootView: MenuBarPanel()
+                    .environmentObject(model)
+            )
+        }
         updateTitle()
     }
 
     func updateTitle() {
         guard let model, let button = statusItem?.button else { return }
         let latency = model.stats(for: model.monitoredProxyNames).lastLatency
-        button.title = latency.map { " \($0)ms" } ?? " --"
+        let title = latency.map { " \($0)ms" } ?? " --"
+        guard title != lastRenderedTitle else { return }
+        lastRenderedTitle = title
+        button.title = title
     }
 
 @objc private func togglePopover(_ sender: NSStatusBarButton) {
@@ -3145,7 +3294,7 @@ struct LegacyContentView: View {
                     .legacyInteractiveCard()
                     .legacyAppear(index: 4, distance: 14)
 
-                LegacyRecordsList(records: Array(model.records.suffix(60).reversed()), model: model)
+                LegacyRecordsList(records: model.recentRecords(limit: 60), model: model)
                     .legacyAppear(index: 5, distance: 14)
             }
             .padding(20)

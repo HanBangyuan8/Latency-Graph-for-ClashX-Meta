@@ -12,7 +12,7 @@ APP_DIR="$STAGE_DIR/$PRODUCT_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-CLANG_CACHE_DIR="$ROOT_DIR/.build/clang-module-cache"
+CLANG_CACHE_DIR="$STAGE_DIR/clang-module-cache"
 ARCH_FLAGS=()
 USE_ARCH_FLAGS=0
 
@@ -34,6 +34,14 @@ clean_bundle_metadata() {
             xattr -d com.apple.FinderInfo "$file_path" 2>/dev/null || true
             xattr -d 'com.apple.fileprovider.fpfs#P' "$file_path" 2>/dev/null || true
         done < <(find "$bundle_dir" -print0)
+    fi
+}
+
+assert_no_user_cache_payload() {
+    local bundle_dir="${1:-$APP_DIR}"
+    if find "$bundle_dir" \( -name "probes.sqlite" -o -name "probes.json" -o -name "*Cache*" -o -name "*cache*" \) -print -quit | grep -q .; then
+        echo "Refusing to package user cache or probe history inside $bundle_dir" >&2
+        exit 1
     fi
 }
 
@@ -66,6 +74,7 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BINARY_PATH" "$MACOS_DIR/$PRODUCT_NAME"
 chmod +x "$MACOS_DIR/$PRODUCT_NAME"
 clean_bundle_metadata
+assert_no_user_cache_payload
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -89,9 +98,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.4.0</string>
+    <string>1.5.0</string>
     <key>CFBundleVersion</key>
-    <string>11</string>
+    <string>12</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>
@@ -104,8 +113,10 @@ PLIST
 
 if command -v codesign >/dev/null 2>&1; then
     clean_bundle_metadata
+    assert_no_user_cache_payload
     codesign --force --deep --sign - "$APP_DIR" >/dev/null
     clean_bundle_metadata
+    assert_no_user_cache_payload
     codesign --verify --deep --strict "$APP_DIR"
 fi
 
@@ -113,6 +124,7 @@ mkdir -p "$DIST_DIR"
 rm -rf "$FINAL_APP_DIR"
 ditto --norsrc "$APP_DIR" "$FINAL_APP_DIR"
 clean_bundle_metadata "$FINAL_APP_DIR"
+assert_no_user_cache_payload "$FINAL_APP_DIR"
 if command -v codesign >/dev/null 2>&1; then
     codesign --verify --deep "$FINAL_APP_DIR"
 fi

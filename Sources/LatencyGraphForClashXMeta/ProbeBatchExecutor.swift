@@ -101,8 +101,9 @@ struct ProbeBatchExecutor: Sendable {
     }
 
     private func ordered(_ results: [ProbeBatchResult], by proxyNames: [String]) -> [ProbeBatchResult] {
-        results.sorted { lhs, rhs in
-            (proxyNames.firstIndex(of: lhs.proxyName) ?? .max) < (proxyNames.firstIndex(of: rhs.proxyName) ?? .max)
+        let order = Dictionary(uniqueKeysWithValues: proxyNames.enumerated().map { ($0.element, $0.offset) })
+        return results.sorted { lhs, rhs in
+            (order[lhs.proxyName] ?? .max) < (order[rhs.proxyName] ?? .max)
         }
     }
 }

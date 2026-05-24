@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.2 - 2026-05-24
+
+Patch release.
+
+- Refined Recent Records column spacing and fixed node-page scrolling behavior.
+
 ## v1.5.1 - 2026-05-24
 
 Patch release.

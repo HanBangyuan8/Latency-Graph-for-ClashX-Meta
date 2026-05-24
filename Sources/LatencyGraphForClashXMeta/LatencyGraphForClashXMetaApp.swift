@@ -583,7 +583,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.1"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.2"
     }
 
     private func scheduleMonitoringLoop() {
@@ -1373,43 +1373,48 @@ struct ModernContentView: View {
 
     private var detailContent: some View {
         GeometryReader { geometry in
-            ScrollViewReader { scrollProxy in
-                ScrollView {
-                    Color.clear
-                        .frame(height: 0)
-                        .id("detailTop")
+            if selectedSidebarPage.hasPrefix("node:") {
+                let proxyName = String(selectedSidebarPage.dropFirst("node:".count))
+                NodePageView(
+                    proxyName: proxyName,
+                    selectedHours: $selectedHours,
+                    availableHeight: geometry.size.height,
+                    navigationDirection: navigationDirection
+                )
+                .environmentObject(model)
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .id(selectedSidebarPage)
+                .transition(pageTransition)
+                .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
+                .coordinateSpace(name: "detailScroll")
+            } else {
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        Color.clear
+                            .frame(height: 0)
+                            .id("detailTop")
 
-                    if selectedSidebarPage == "settings" {
+                        if selectedSidebarPage == "settings" {
                         SettingsPage()
                             .environmentObject(model)
                             .padding(20)
                             .id(selectedSidebarPage)
                             .transition(pageTransition)
-                    } else if selectedSidebarPage.hasPrefix("node:") {
-                        let proxyName = String(selectedSidebarPage.dropFirst("node:".count))
-                            NodePageView(
-                                proxyName: proxyName,
-                                selectedHours: $selectedHours,
-                                availableHeight: geometry.size.height,
-                                navigationDirection: navigationDirection
-                            )
-                            .environmentObject(model)
-                            .padding(20)
-                            .id(selectedSidebarPage)
-                            .transition(pageTransition)
-                    } else {
+                        } else {
                         OverviewPage(selectedHours: $selectedHours, navigationDirection: navigationDirection)
                             .environmentObject(model)
                             .padding(20)
                             .id(selectedSidebarPage)
                             .transition(pageTransition)
+                        }
                     }
-                }
-                .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
-                .coordinateSpace(name: "detailScroll")
-                .onChange(of: selectedSidebarPage) { _ in
-                    withAnimation(interfaceAnimation) {
-                        scrollProxy.scrollTo("detailTop", anchor: .top)
+                    .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
+                    .coordinateSpace(name: "detailScroll")
+                    .onChange(of: selectedSidebarPage) { _ in
+                        withAnimation(interfaceAnimation) {
+                            scrollProxy.scrollTo("detailTop", anchor: .top)
+                        }
                     }
                 }
             }
@@ -1622,45 +1627,50 @@ struct NativeModernContentView: View {
             .navigationSplitViewColumnWidth(min: 272, ideal: 292, max: 340)
         } detail: {
             GeometryReader { geometry in
-                ScrollViewReader { scrollProxy in
-                    ScrollView {
-                    Color.clear
-                        .frame(height: 0)
-                        .id("detailTop")
-
-                    if selectedSidebarPage == "settings" {
-                        SettingsPage()
-                            .environmentObject(model)
-                            .padding(20)
-                            .id(selectedSidebarPage)
-                            .transition(pageTransition)
-                    } else if selectedSidebarPage.hasPrefix("node:") {
-                        let proxyName = String(selectedSidebarPage.dropFirst("node:".count))
-                            NodePageView(
-                                proxyName: proxyName,
-                                selectedHours: $selectedHours,
-                                availableHeight: geometry.size.height,
-                                navigationDirection: navigationDirection
-                            )
-                            .environmentObject(model)
-                            .padding(20)
-                            .id(selectedSidebarPage)
-                            .transition(pageTransition)
-                    } else {
-                            OverviewPage(selectedHours: $selectedHours, navigationDirection: navigationDirection)
-                            .environmentObject(model)
-                            .padding(20)
-                            .id(selectedSidebarPage)
-                            .transition(pageTransition)
-                    }
-                    }
+                if selectedSidebarPage.hasPrefix("node:") {
+                    let proxyName = String(selectedSidebarPage.dropFirst("node:".count))
+                    NodePageView(
+                        proxyName: proxyName,
+                        selectedHours: $selectedHours,
+                        availableHeight: geometry.size.height,
+                        navigationDirection: navigationDirection
+                    )
+                    .environmentObject(model)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .id(selectedSidebarPage)
+                    .transition(pageTransition)
                     .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
                     .coordinateSpace(name: "detailScroll")
-                    .onChange(of: selectedSidebarPage) { _ in
-                    withAnimation(interfaceAnimation) {
-                        scrollProxy.scrollTo("detailTop", anchor: .top)
+                } else {
+                    ScrollViewReader { scrollProxy in
+                        ScrollView {
+                            Color.clear
+                                .frame(height: 0)
+                                .id("detailTop")
+
+                            if selectedSidebarPage == "settings" {
+                                SettingsPage()
+                                    .environmentObject(model)
+                                    .padding(20)
+                                    .id(selectedSidebarPage)
+                                    .transition(pageTransition)
+                            } else {
+                            OverviewPage(selectedHours: $selectedHours, navigationDirection: navigationDirection)
+                                .environmentObject(model)
+                                .padding(20)
+                                .id(selectedSidebarPage)
+                                .transition(pageTransition)
+                            }
+                        }
+                        .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
+                        .coordinateSpace(name: "detailScroll")
+                        .onChange(of: selectedSidebarPage) { _ in
+                            withAnimation(interfaceAnimation) {
+                                scrollProxy.scrollTo("detailTop", anchor: .top)
+                            }
+                        }
                     }
-                }
                 }
             }
             .navigationTitle(model.t("节点监控"))
@@ -1906,25 +1916,7 @@ struct NodePageView: View {
                 .buttonStyle(.bordered)
             }
 
-            Table(pageRecords) {
-                TableColumn(model.t("时间")) { record in
-                    Text(record.timestamp, format: .dateTime.month().day().hour().minute().second())
-                }
-                TableColumn(model.t("节点")) { record in
-                    Text(record.proxyName)
-                }
-                TableColumn(model.t("结果")) { record in
-                    Text(record.success ? model.t("成功") : model.t("失败"))
-                        .foregroundStyle(record.success ? .green : .red)
-                }
-                TableColumn(model.t("延迟")) { record in
-                    Text(record.latencyMs.map { "\($0) ms" } ?? "--")
-                }
-                TableColumn(model.t("说明")) { record in
-                    Text(record.errorDescription.map(model.displayError) ?? "")
-                        .lineLimit(1)
-                }
-            }
+            RecentRecordsTable(records: pageRecords, model: model)
             .frame(height: latestRecordsTableHeight)
             .background {
                 GeometryReader { geometry in
@@ -1963,6 +1955,82 @@ struct NodePageView: View {
                 latestRecordsTableHeight = nextHeight
             }
         }
+    }
+}
+
+@available(macOS 12.0, *)
+struct RecentRecordsTable: View {
+    let records: [ProbeRecord]
+    let model: AppModel
+
+    private let horizontalPadding: CGFloat = 14
+    private let columnSpacing: CGFloat = 12
+    private let timeWidth: CGFloat = 172
+    private let nodeWidth: CGFloat = 280
+
+    var body: some View {
+        VStack(spacing: 0) {
+            tableHeader
+                .padding(.horizontal, horizontalPadding)
+                .padding(.vertical, 9)
+                .background(Color.secondary.opacity(0.08))
+
+            Divider()
+
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    ForEach(records) { record in
+                        recordRow(record)
+                            .padding(.horizontal, horizontalPadding)
+                            .padding(.vertical, 8)
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+
+    private var tableHeader: some View {
+        HStack(spacing: columnSpacing) {
+            headerText(model.t("时间"))
+                .frame(width: timeWidth, alignment: .leading)
+            headerText(model.t("节点"))
+                .frame(width: nodeWidth, alignment: .leading)
+            headerText(model.t("结果"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            headerText(model.t("延迟"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            headerText(model.t("说明"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func recordRow(_ record: ProbeRecord) -> some View {
+        HStack(spacing: columnSpacing) {
+            Text(record.timestamp, format: .dateTime.month().day().hour().minute().second())
+                .frame(width: timeWidth, alignment: .leading)
+            Text(record.proxyName)
+                .frame(width: nodeWidth, alignment: .leading)
+            Text(record.success ? model.t("成功") : model.t("失败"))
+                .foregroundStyle(record.success ? .green : .red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(record.latencyMs.map { "\($0) ms" } ?? "--")
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(record.errorDescription.map(model.displayError) ?? "")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.callout)
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+
+    private func headerText(_ value: String) -> some View {
+        Text(value)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
     }
 }
 

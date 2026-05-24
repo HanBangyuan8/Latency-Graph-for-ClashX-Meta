@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.5.3 - 2026-05-25
+
+Patch release.
+
+- Refined the Settings page with adaptive height behavior and removed whole-page scrolling.
+- Reworked the sidebar accent color selector into adaptive-width slim color bars.
+- Added heavier macOS 12 and macOS 10.15/11 custom drawing to better match the macOS 15 visual style.
+- Reduced sidebar width targets while keeping the restored stable layout.
+
 ## v1.5.2 - 2026-05-24
 
 Patch release.

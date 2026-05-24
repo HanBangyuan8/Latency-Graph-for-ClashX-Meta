@@ -65,6 +65,20 @@ struct LightweightPressButtonStyle: ButtonStyle {
     }
 }
 
+struct AnyButtonStyle: ButtonStyle {
+    private let makeBody: (Configuration) -> AnyView
+
+    init<S: ButtonStyle>(_ style: S) {
+        self.makeBody = { configuration in
+            AnyView(style.makeBody(configuration: configuration))
+        }
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        makeBody(configuration)
+    }
+}
+
 @available(macOS 12.0, *)
 struct ControlButtonHoverModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -143,6 +157,84 @@ struct LegacyButtonMotionStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
             .opacity(configuration.isPressed ? 0.76 : 1)
             .animation(MotionTokens.legacyHover, value: configuration.isPressed)
+    }
+}
+
+struct Legacy15PanelModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let accentColor: Color
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color(NSColor.windowBackgroundColor).opacity(0.78))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(accentColor.opacity(0.10), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.055), radius: 12, x: 0, y: 6)
+    }
+}
+
+struct Legacy15SidebarButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    let accentColor: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? accentColor.opacity(0.16) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(isSelected ? accentColor.opacity(0.20) : Color.clear, lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(MotionTokens.legacyHover, value: configuration.isPressed)
+            .animation(MotionTokens.legacyHover, value: isSelected)
+    }
+}
+
+struct Legacy15ControlButtonStyle: ButtonStyle {
+    let isProminent: Bool
+    let accentColor: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: isProminent ? .semibold : .regular))
+            .padding(.vertical, 5)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isProminent ? accentColor : Color(NSColor.windowBackgroundColor).opacity(0.66))
+            )
+            .foregroundColor(isProminent ? .white : .primary)
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(isProminent ? Color.white.opacity(0.18) : Color.black.opacity(0.10), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(isProminent ? 0.10 : 0.035), radius: isProminent ? 7 : 3, x: 0, y: isProminent ? 3 : 1)
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .opacity(configuration.isPressed ? 0.84 : 1)
+            .animation(MotionTokens.legacyHover, value: configuration.isPressed)
+    }
+}
+
+extension View {
+    func legacy15Panel(cornerRadius: CGFloat = 14, accentColor: Color) -> some View {
+        modifier(Legacy15PanelModifier(cornerRadius: cornerRadius, accentColor: accentColor))
     }
 }
 

@@ -583,7 +583,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.2"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.3"
     }
 
     private func scheduleMonitoringLoop() {
@@ -1139,11 +1139,14 @@ struct ModernContentView: View {
         return widestText + 4
     }
 
-    private var sidebarColumnWidth: CGFloat { 250 }
+    private var sidebarColumnWidth: CGFloat { 238 }
     private var titlebarContentHeight: CGFloat { 52 }
     private var collapsedTitleLeadingSpacer: CGFloat { 112 }
     private var usesIntegratedTitlebar: Bool { model.runtimeProfile.osFamily == .macOS15OrNewer }
     private var allowsSidebarCollapse: Bool { model.runtimePlan.allowsSidebarCollapse }
+    private var usesLegacy15CompatVisuals: Bool {
+        model.runtimeProfile.osFamily == .macOS12
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1161,6 +1164,7 @@ struct ModernContentView: View {
         .integratedWindowTitlebar(usesIntegratedTitlebar)
         .frame(minWidth: 1010, minHeight: 760)
         .compatibleTint(model.accentColor)
+        .background(legacyCompatWindowBackground)
         .background(MacOS12StatusBarBridge(model: model).frame(width: 0, height: 0))
         .environment(\.locale, model.locale)
         .animation(interfaceAnimation, value: selectedSidebarPage)
@@ -1223,7 +1227,26 @@ struct ModernContentView: View {
     }
 
     private var sidebarBackground: Color {
-        Color(NSColor.controlBackgroundColor).opacity(0.92)
+        usesLegacy15CompatVisuals
+            ? Color(NSColor.windowBackgroundColor).opacity(0.82)
+            : Color(NSColor.controlBackgroundColor).opacity(0.92)
+    }
+
+    private var legacyCompatWindowBackground: some View {
+        Group {
+            if usesLegacy15CompatVisuals {
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(NSColor.windowBackgroundColor).opacity(0.98),
+                        Color(NSColor.controlBackgroundColor).opacity(0.88)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                Color.clear
+            }
+        }
     }
 
     private var sidebarToggleButton: some View {
@@ -1279,7 +1302,7 @@ struct ModernContentView: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(Legacy15SidebarButtonStyle(isSelected: selectedSidebarPage == "settings", accentColor: model.accentColor))
             }
 
             Section(model.t("控制")) {
@@ -1347,7 +1370,7 @@ struct ModernContentView: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(Legacy15SidebarButtonStyle(isSelected: selectedSidebarPage == "overview", accentColor: model.accentColor))
             }
 
             Section(model.t("节点分页")) {
@@ -1364,7 +1387,7 @@ struct ModernContentView: View {
                             }
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(Legacy15SidebarButtonStyle(isSelected: selectedSidebarPage == "node:\(proxy)", accentColor: model.accentColor))
                 }
             }
         }
@@ -1373,7 +1396,16 @@ struct ModernContentView: View {
 
     private var detailContent: some View {
         GeometryReader { geometry in
-            if selectedSidebarPage.hasPrefix("node:") {
+            if selectedSidebarPage == "settings" {
+                SettingsPage(availableHeight: geometry.size.height)
+                    .environmentObject(model)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .id(selectedSidebarPage)
+                    .transition(pageTransition)
+                    .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
+                    .coordinateSpace(name: "detailScroll")
+            } else if selectedSidebarPage.hasPrefix("node:") {
                 let proxyName = String(selectedSidebarPage.dropFirst("node:".count))
                 NodePageView(
                     proxyName: proxyName,
@@ -1395,19 +1427,11 @@ struct ModernContentView: View {
                             .frame(height: 0)
                             .id("detailTop")
 
-                        if selectedSidebarPage == "settings" {
-                        SettingsPage()
-                            .environmentObject(model)
-                            .padding(20)
-                            .id(selectedSidebarPage)
-                            .transition(pageTransition)
-                        } else {
                         OverviewPage(selectedHours: $selectedHours, navigationDirection: navigationDirection)
                             .environmentObject(model)
                             .padding(20)
                             .id(selectedSidebarPage)
                             .transition(pageTransition)
-                        }
                     }
                     .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
                     .coordinateSpace(name: "detailScroll")
@@ -1438,13 +1462,13 @@ struct ModernContentView: View {
                     Text(title)
                         .frame(width: controlButtonWidth)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(Legacy15ControlButtonStyle(isProminent: true, accentColor: model.accentColor))
             } else {
                 Button(role: role, action: action) {
                     Text(title)
                         .frame(width: controlButtonWidth)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(Legacy15ControlButtonStyle(isProminent: false, accentColor: model.accentColor))
             }
         }
         .compatibleTint(model.accentColor)
@@ -1624,10 +1648,19 @@ struct NativeModernContentView: View {
             }
             .listStyle(.sidebar)
             .navigationTitle("Latency Graph for ClashX Meta")
-            .navigationSplitViewColumnWidth(min: 272, ideal: 292, max: 340)
+            .navigationSplitViewColumnWidth(min: 248, ideal: 272, max: 330)
         } detail: {
             GeometryReader { geometry in
-                if selectedSidebarPage.hasPrefix("node:") {
+                if selectedSidebarPage == "settings" {
+                    SettingsPage(availableHeight: geometry.size.height)
+                        .environmentObject(model)
+                        .padding(20)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .id(selectedSidebarPage)
+                        .transition(pageTransition)
+                        .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
+                        .coordinateSpace(name: "detailScroll")
+                } else if selectedSidebarPage.hasPrefix("node:") {
                     let proxyName = String(selectedSidebarPage.dropFirst("node:".count))
                     NodePageView(
                         proxyName: proxyName,
@@ -1649,19 +1682,11 @@ struct NativeModernContentView: View {
                                 .frame(height: 0)
                                 .id("detailTop")
 
-                            if selectedSidebarPage == "settings" {
-                                SettingsPage()
-                                    .environmentObject(model)
-                                    .padding(20)
-                                    .id(selectedSidebarPage)
-                                    .transition(pageTransition)
-                            } else {
                             OverviewPage(selectedHours: $selectedHours, navigationDirection: navigationDirection)
                                 .environmentObject(model)
                                 .padding(20)
                                 .id(selectedSidebarPage)
                                 .transition(pageTransition)
-                            }
                         }
                         .versionedPageSwitchMotion(profile: versionedMotionProfile, pageID: selectedSidebarPage, direction: navigationDirection)
                         .coordinateSpace(name: "detailScroll")
@@ -1721,34 +1746,36 @@ struct AccentColorPicker: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(minimum: 18), spacing: 8), count: 8)
+        Array(repeating: GridItem(.flexible(minimum: 16), spacing: 7), count: 8)
     }
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 5) {
             ForEach(AccentColorOption.all) { option in
                 Button {
                     withAnimation(reduceMotion ? nil : MotionTokens.color) {
                         model.accentColorID = option.id
                     }
                 } label: {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(option.color)
-                        .aspectRatio(1, contentMode: .fit)
-                        .frame(maxWidth: .infinity)
-                        .overlay {
-                            if model.accentColorID == option.id {
-                                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                    .strokeBorder(.primary.opacity(0.85), lineWidth: 2)
-                                    .padding(-4)
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .strokeBorder(.white.opacity(0.9), lineWidth: 1)
-                                            .padding(-1)
-                                    }
+                    ZStack {
+                        Capsule(style: .continuous)
+                            .fill(option.color)
+                        .frame(height: 14)
+                            .overlay {
+                                if model.accentColorID == option.id {
+                                    Capsule(style: .continuous)
+                                        .strokeBorder(.primary.opacity(0.9), lineWidth: 1.5)
+                                        .overlay {
+                                            Capsule(style: .continuous)
+                                                .strokeBorder(.white.opacity(0.9), lineWidth: 0.8)
+                                        }
+                                }
                             }
-                        }
-                        .accessibilityLabel(option.name(for: model.language))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 20)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(option.name(for: model.language))
                 }
                 .buttonStyle(LightweightPressButtonStyle())
                 .frame(maxWidth: .infinity)
@@ -2062,6 +2089,7 @@ struct NodeStatsOverviewRow: View {
 @available(macOS 12.0, *)
 struct SettingsPage: View {
     @EnvironmentObject private var model: AppModel
+    var availableHeight: CGFloat? = nil
 
     private var versionedMotionProfile: VersionedMotionProfile {
         VersionedMotionProfile(runtimeProfile: model.runtimeProfile, intensity: model.motionIntensity)
@@ -2072,9 +2100,10 @@ struct SettingsPage: View {
             Text(model.t("设置"))
                 .font(.title2.bold())
                 .versionedComponentAppear(profile: versionedMotionProfile, pageID: "settings", direction: .unchanged)
-            SettingsPanel(model: model)
+            SettingsPanel(model: model, availableHeight: availableHeight)
                 .versionedComponentAppear(profile: versionedMotionProfile, pageID: "settings", direction: .unchanged)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -2119,6 +2148,7 @@ struct EmptyChartOverlay: View {
 @available(macOS 12.0, *)
 struct SettingsPanel: View {
     @ObservedObject var model: AppModel
+    var availableHeight: CGFloat? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var settingsAnimation: Animation? {
@@ -2152,10 +2182,12 @@ struct SettingsPanel: View {
     private let probeSampleCountChoices = [1, 2, 3, 4, 5]
 
     var body: some View {
-        settingsRows
+        GeometryReader { geometry in
+            settingsRows(manualProxyListHeight: manualProxyListHeight(for: geometry.size.height))
+        }
     }
 
-    private var settingsRows: some View {
+    private func settingsRows(manualProxyListHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             settingsSection(title: model.t("连接与认证"), index: 0) {
                 controllerURLRow
@@ -2166,7 +2198,7 @@ struct SettingsPanel: View {
                 monitorAllRow
                 followGroupRow
                 proxyGroupRow
-                manualProxyRow
+                manualProxyRow(height: manualProxyListHeight)
             }
 
             settingsSection(title: model.t("探测参数"), index: 2) {
@@ -2189,6 +2221,13 @@ struct SettingsPanel: View {
         .animation(settingsAnimation, value: model.monitorAllProxiesInGroup)
         .animation(settingsAnimation, value: model.probeIntervalMs)
         .animation(settingsAnimation, value: model.probeSampleCount)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func manualProxyListHeight(for panelHeight: CGFloat) -> CGFloat {
+        let fixedContentHeight: CGFloat = 492
+        let bottomPadding: CGFloat = 8
+        return max(120, panelHeight - fixedContentHeight - bottomPadding)
     }
 
     private func settingsSection<Content: View>(title: String, index: Int, @ViewBuilder content: () -> Content) -> some View {
@@ -2263,7 +2302,7 @@ struct SettingsPanel: View {
         }
     }
 
-    private var manualProxyRow: some View {
+    private func manualProxyRow(height: CGFloat) -> some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.t("手动多选节点"))
@@ -2273,7 +2312,7 @@ struct SettingsPanel: View {
             }
             .frame(width: 160, alignment: .leading)
 
-            manualProxySelectionList
+            manualProxySelectionList(height: height)
         }
     }
 
@@ -2335,7 +2374,7 @@ struct SettingsPanel: View {
         }
     }
 
-    private var manualProxySelectionList: some View {
+    private func manualProxySelectionList(height: CGFloat) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
                 ForEach(manualProxyChoices, id: \.self) { proxy in
@@ -2357,7 +2396,7 @@ struct SettingsPanel: View {
                 }
             }
         }
-        .frame(minHeight: 90, maxHeight: 180)
+        .frame(height: height)
         .padding(8)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
         .disabled(model.useSelectedProxyFromGroup || model.monitorAllProxiesInGroup)
@@ -3325,13 +3364,13 @@ struct LegacyContentView: View {
     var body: some View {
         HStack(spacing: 0) {
             legacySidebar
-                .frame(width: 270)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.92))
+                .frame(width: 252)
+                .background(legacySidebarBackground)
                 .legacyAppear(index: 0, distance: 0)
 
             VStack(alignment: .leading, spacing: 16) {
                 Text(model.t("节点监控"))
-                    .font(.title)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .fontWeight(.bold)
                     .legacyAppear(index: 1)
 
@@ -3357,82 +3396,196 @@ struct LegacyContentView: View {
                 LegacyLatencyChart(records: selectedRecords, color: model.accentColor)
                     .id(selectedRecords.count)
                     .frame(height: 320)
-                    .background(Color(NSColor.windowBackgroundColor))
-                    .cornerRadius(14)
+                    .padding(12)
+                    .legacy15Panel(cornerRadius: 16, accentColor: model.accentColor)
                     .legacyInteractiveCard()
                     .legacyAppear(index: 4, distance: 14)
 
                 LegacyRecordsList(records: model.recentRecords(limit: 60), model: model)
+                    .legacy15Panel(cornerRadius: 16, accentColor: model.accentColor)
                     .legacyAppear(index: 5, distance: 14)
             }
             .padding(20)
+            .background(legacyDetailBackground)
         }
         .frame(minWidth: 980, minHeight: 700)
+        .background(legacyWindowBackground)
         .legacyAppear(index: 0, distance: 8)
         .legacyVersionedStartupMotion(profile: versionedMotionProfile)
     }
 
     private var legacySidebar: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: $model.languageCode) {
-                ForEach(AppLanguage.allCases) { language in
-                    Text(language.title).tag(language.rawValue)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                legacySidebarSection(model.t("Language")) {
+                    Picker("", selection: $model.languageCode) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.title).tag(language.rawValue)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+
+                legacySidebarSection(model.t("动态效果")) {
+                    Picker("", selection: $model.motionIntensityID) {
+                        Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
+                        Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
+                        Text(model.t("无动画")).tag(MotionIntensity.none.rawValue)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+
+                legacySidebarSection(model.t("主要颜色")) {
+                    LegacyAccentColorStrip(model: model)
+                }
+
+                legacySidebarSection(model.t("控制")) {
+                    Button(model.isRunning ? model.t("停止监控") : model.t("开始监控")) {
+                        model.isRunning ? model.stopMonitoring() : model.startMonitoring()
+                    }
+                    .buttonStyle(Legacy15ControlButtonStyle(isProminent: true, accentColor: model.accentColor))
+
+                    Button(model.t("立即探测")) {
+                        Task { await model.runProbe() }
+                    }
+                    .buttonStyle(Legacy15ControlButtonStyle(isProminent: false, accentColor: model.accentColor))
+
+                    Button(model.t("刷新代理列表")) {
+                        Task { await model.refreshProxyCatalog() }
+                    }
+                    .buttonStyle(Legacy15ControlButtonStyle(isProminent: false, accentColor: model.accentColor))
+
+                    Button(model.t("删除历史数据")) {
+                        model.clearHistory()
+                    }
+                    .buttonStyle(Legacy15ControlButtonStyle(isProminent: false, accentColor: model.accentColor))
+                }
+
+                legacySidebarSection(model.t("设置")) {
+                    LegacyFieldLabel(model.t("Controller URL"))
+                    TextField(model.t("Controller URL"), text: $model.controllerURL)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    LegacyFieldLabel(model.t("探测目标"))
+                    TextField(model.t("探测目标"), text: $model.targetURL)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    Picker(model.t("数据点间隔"), selection: $model.probeIntervalMs) {
+                        Text("5000").tag(5000)
+                        Text("10000").tag(10000)
+                        Text("30000").tag(30000)
+                        Text("60000").tag(60000)
+                        Text("120000").tag(120000)
+                    }
+                }
+
+                legacySidebarSection(model.t("状态")) {
+                    LegacyStatusLine(title: model.t("当前节点"), value: model.resolvedProxyName)
+                    LegacyStatusLine(title: model.t("监控节点数"), value: "\(model.monitoredProxyNames.count)")
+                    LegacyStatusLine(title: model.t("监控状态"), value: model.isRunning ? model.t("运行中") : model.t("已停止"))
                 }
             }
-            .pickerStyle(SegmentedPickerStyle())
-
-            Text(model.t("动态效果"))
-                .font(.headline)
-            Picker("", selection: $model.motionIntensityID) {
-                Text(model.t("增强")).tag(MotionIntensity.enhanced.rawValue)
-                Text(model.t("减弱")).tag(MotionIntensity.reduced.rawValue)
-                Text(model.t("无动画")).tag(MotionIntensity.none.rawValue)
-            }
-            .pickerStyle(SegmentedPickerStyle())
-
-            Text(model.t("控制"))
-                .font(.headline)
-            Button(model.isRunning ? model.t("停止监控") : model.t("开始监控")) {
-                model.isRunning ? model.stopMonitoring() : model.startMonitoring()
-            }
-            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
-            Button(model.t("立即探测")) {
-                Task { await model.runProbe() }
-            }
-            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
-            Button(model.t("刷新代理列表")) {
-                Task { await model.refreshProxyCatalog() }
-            }
-            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
-            Button(model.t("删除历史数据")) {
-                model.clearHistory()
-            }
-            .buttonStyle(LegacyVersionedPagePressButtonStyle(profile: versionedMotionProfile))
-
-            Divider()
-
-            Text(model.t("设置"))
-                .font(.headline)
-            TextField(model.t("Controller URL"), text: $model.controllerURL)
-            TextField(model.t("探测目标"), text: $model.targetURL)
-            Picker(model.t("数据点间隔"), selection: $model.probeIntervalMs) {
-                Text("5000").tag(5000)
-                Text("10000").tag(10000)
-                Text("30000").tag(30000)
-                Text("60000").tag(60000)
-                Text("120000").tag(120000)
-            }
-
-            Divider()
-
-            Text(model.t("状态"))
-                .font(.headline)
-            Text("\(model.t("当前节点")): \(model.resolvedProxyName)")
-            Text("\(model.t("监控节点数")): \(model.monitoredProxyNames.count)")
-            Text("\(model.t("监控状态")): \(model.isRunning ? model.t("运行中") : model.t("已停止"))")
-            Spacer()
+            .padding(14)
         }
-        .padding(16)
+    }
+
+    private var legacyWindowBackground: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                Color(NSColor.windowBackgroundColor).opacity(0.98),
+                Color(NSColor.controlBackgroundColor).opacity(0.88)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var legacySidebarBackground: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                Color(NSColor.controlBackgroundColor).opacity(0.88),
+                Color(NSColor.windowBackgroundColor).opacity(0.72)
+            ]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    private var legacyDetailBackground: some View {
+        Color(NSColor.windowBackgroundColor).opacity(0.24)
+    }
+
+    private func legacySidebarSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+            .padding(10)
+            .legacy15Panel(cornerRadius: 12, accentColor: model.accentColor)
+        }
+    }
+}
+
+struct LegacyFieldLabel: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.caption)
+            .foregroundColor(.secondary)
+    }
+}
+
+struct LegacyStatusLine: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .lineLimit(1)
+        }
+        .font(.system(size: 12))
+    }
+}
+
+struct LegacyAccentColorStrip: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 5) {
+            ForEach(Array(AccentColorOption.all.chunked(into: 8).enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 7) {
+                    ForEach(row) { option in
+                        Button {
+                            model.accentColorID = option.id
+                        } label: {
+                            ZStack {
+                                Capsule(style: .continuous)
+                                    .fill(option.color)
+                                    .frame(height: 14)
+                                    .overlay(
+                                        Capsule(style: .continuous)
+                                            .strokeBorder(model.accentColorID == option.id ? Color.primary.opacity(0.9) : Color.clear, lineWidth: 1.5)
+                                    )
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 20)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(LegacyButtonMotionStyle())
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -3465,8 +3618,7 @@ struct LegacyStatCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
+        .legacy15Panel(cornerRadius: 14, accentColor: .clear)
         .legacyInteractiveCard()
     }
 }
@@ -3541,20 +3693,80 @@ struct LegacyRecordsList: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.t("最近记录"))
                 .font(.headline)
-            List(records) { record in
+            VStack(spacing: 0) {
                 HStack {
-                    Text(Self.timeFormatter.string(from: record.timestamp))
-                        .frame(width: 90, alignment: .leading)
-                    Text(record.proxyName)
-                        .frame(width: 180, alignment: .leading)
-                    Text(record.success ? model.t("成功") : model.t("失败"))
-                        .foregroundColor(record.success ? .green : .red)
+                    Text(model.t("时间"))
+                        .frame(width: 92, alignment: .leading)
+                    Text(model.t("节点"))
+                        .frame(width: 190, alignment: .leading)
+                    Text(model.t("结果"))
+                        .frame(width: 78, alignment: .leading)
                     Spacer()
-                    Text(record.latencyMs.map { "\($0) ms" } ?? "--")
+                    Text(model.t("延迟"))
+                        .frame(width: 72, alignment: .trailing)
                 }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.58))
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(records) { record in
+                            LegacyRecordRow(record: record, model: model)
+                            Divider()
+                                .opacity(0.42)
+                        }
+                        if records.isEmpty {
+                            Text("--")
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 24)
+                        }
+                    }
+                }
+                .frame(minHeight: 160, maxHeight: 220)
             }
-            .frame(minHeight: 180)
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .strokeBorder(Color.black.opacity(0.09), lineWidth: 1)
+            )
         }
+        .padding(12)
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        return formatter
+    }()
+}
+
+struct LegacyRecordRow: View {
+    let record: ProbeRecord
+    let model: AppModel
+
+    var body: some View {
+        HStack {
+            Text(Self.timeFormatter.string(from: record.timestamp))
+                .frame(width: 92, alignment: .leading)
+            Text(record.proxyName)
+                .lineLimit(1)
+                .frame(width: 190, alignment: .leading)
+            Text(record.success ? model.t("成功") : model.t("失败"))
+                .foregroundColor(record.success ? .green : .red)
+                .frame(width: 78, alignment: .leading)
+            Spacer()
+            Text(record.latencyMs.map { "\($0) ms" } ?? "--")
+                .frame(width: 72, alignment: .trailing)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.34))
     }
 
     private static let timeFormatter: DateFormatter = {

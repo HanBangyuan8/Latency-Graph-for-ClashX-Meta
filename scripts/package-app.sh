@@ -98,9 +98,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.0</string>
+    <string>1.5.1</string>
     <key>CFBundleVersion</key>
-    <string>12</string>
+    <string>13</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>

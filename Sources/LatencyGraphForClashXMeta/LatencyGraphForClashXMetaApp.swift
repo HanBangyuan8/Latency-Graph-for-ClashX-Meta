@@ -583,7 +583,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.1"
     }
 
     private func scheduleMonitoringLoop() {

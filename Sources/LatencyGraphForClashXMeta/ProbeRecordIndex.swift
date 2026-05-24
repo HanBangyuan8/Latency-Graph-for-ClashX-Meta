@@ -110,6 +110,11 @@ struct ProbeRecordIndex {
 
         if let proxies, proxies.count > 1 {
             filtered = Self.recordsInCompleteBatches(filtered, proxies: proxies)
+            return ChartDownsampler.reduceAlignedBatches(
+                filtered,
+                maxTotalPoints: maxTotalPoints,
+                seriesCount: proxies.count
+            )
         }
 
         return ChartDownsampler.reduce(

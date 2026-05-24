@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.1 - 2026-05-24
+
+Patch release.
+
+- Fixed multi-node chart alignment by downsampling complete probe batches together.
+
 ## v1.5.0 - 2026-05-22
 
 Major release.

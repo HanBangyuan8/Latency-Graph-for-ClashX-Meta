@@ -74,8 +74,8 @@ enum AboutPanelPresenter {
     @MainActor
     static func show() {
         let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "1.6.0"
-        let build = info?["CFBundleVersion"] as? String ?? "16"
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.6.1"
+        let build = info?["CFBundleVersion"] as? String ?? "17"
         NSApplication.shared.orderFrontStandardAboutPanel(options: [
             .applicationName: "Latency Graph for ClashX Meta",
             .applicationVersion: version,

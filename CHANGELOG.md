@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.6.1 - 2026-05-29
+
+Patch release.
+
+- Refined the Settings page height so the full configuration view fits after the database management section was added.
+- Reduced the app icon visual scale to better match current macOS icon sizing.
+
 ## v1.6.0 - 2026-05-29
 
 Major release.

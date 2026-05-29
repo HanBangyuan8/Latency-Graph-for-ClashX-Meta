@@ -30,8 +30,9 @@ func writeIcon(size: Int, name: String) throws {
     let image = NSImage(size: rect.size)
     image.lockFocus()
 
-    let corner = CGFloat(size) * 0.22
-    let body = NSBezierPath(roundedRect: rect.insetBy(dx: CGFloat(size) * 0.06, dy: CGFloat(size) * 0.06), xRadius: corner, yRadius: corner)
+    let iconMargin = CGFloat(size) * 0.12
+    let corner = CGFloat(size) * 0.19
+    let body = NSBezierPath(roundedRect: rect.insetBy(dx: iconMargin, dy: iconMargin), xRadius: corner, yRadius: corner)
     NSGradient(colors: [
         NSColor(calibratedRed: 0.20, green: 0.46, blue: 0.95, alpha: 1),
         NSColor(calibratedRed: 0.58, green: 0.33, blue: 0.90, alpha: 1)
@@ -41,7 +42,7 @@ func writeIcon(size: Int, name: String) throws {
     body.lineWidth = max(1, CGFloat(size) * 0.012)
     body.stroke()
 
-    let graphRect = rect.insetBy(dx: CGFloat(size) * 0.20, dy: CGFloat(size) * 0.24)
+    let graphRect = rect.insetBy(dx: CGFloat(size) * 0.29, dy: CGFloat(size) * 0.32)
     let baseline = graphRect.minY + graphRect.height * 0.42
     let path = NSBezierPath()
     path.move(to: NSPoint(x: graphRect.minX, y: baseline))

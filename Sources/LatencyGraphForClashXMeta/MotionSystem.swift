@@ -269,14 +269,15 @@ struct SettingsSolidCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .padding(16)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color(nsColor: .windowBackgroundColor).opacity(0.72))
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(accentColor.opacity(0.12), lineWidth: 1)
             }
     }

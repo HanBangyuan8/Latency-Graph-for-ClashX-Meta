@@ -226,7 +226,7 @@ enum L10n {
         "测速中": "測速中", "已暂停：未测到": "已暫停：未測到", "天": "天", "已清空全部历史": "已清空全部歷史",
         "没有可清理的历史": "沒有可清理的歷史", "历史已清理": "歷史已清理", "导出 CSV": "匯出 CSV",
         "已导出": "已匯出", "导出失败": "匯出失敗", "数据库管理": "資料庫管理", "数据库大小": "資料庫大小",
-        "记录数": "記錄數", "保留策略": "保留策略", "历史管理": "歷史管理", "清理此节点": "清理此節點"
+        "数据库": "資料庫", "记录数": "記錄數", "保留策略": "保留策略", "历史管理": "歷史管理", "清理此节点": "清理此節點"
     ]
     private static let english: [String: String] = [
         "控制": "Control", "状态": "Status", "当前节点": "Current Node", "监控节点数": "Monitored Nodes", "监控状态": "Monitoring",
@@ -250,7 +250,7 @@ enum L10n {
         "测速中": "Testing", "已暂停：未测到": "Paused: no probes", "天": "days", "已清空全部历史": "All history cleared",
         "没有可清理的历史": "No history to clear", "历史已清理": "History cleared", "导出 CSV": "Export CSV",
         "已导出": "Exported", "导出失败": "Export failed", "数据库管理": "Database", "数据库大小": "Database Size",
-        "记录数": "Records", "保留策略": "Retention", "历史管理": "History", "清理此节点": "Clear Node"
+        "数据库": "Database", "记录数": "Records", "保留策略": "Retention", "历史管理": "History", "清理此节点": "Clear Node"
     ]
 }
 
@@ -2307,7 +2307,7 @@ struct SettingsPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(model.t("设置"))
                 .font(.title2.bold())
                 .versionedComponentAppear(profile: versionedMotionProfile, pageID: "settings", direction: .unchanged)
@@ -2411,7 +2411,7 @@ struct SettingsPanel: View {
     }
 
     private func settingsRows(manualProxyListHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 10) {
             settingsSection(title: model.t("连接与认证"), index: 0) {
                 controllerURLRow
                 secretRow
@@ -2432,8 +2432,7 @@ struct SettingsPanel: View {
             }
 
             settingsSection(title: model.t("数据库管理"), index: 3) {
-                databaseSizeRow
-                retentionPolicyRow
+                databaseSummaryRow
                 databaseActionsRow
             }
         }
@@ -2454,18 +2453,18 @@ struct SettingsPanel: View {
     }
 
     private func manualProxyListHeight(for panelHeight: CGFloat) -> CGFloat {
-        let fixedContentHeight: CGFloat = 642
-        let bottomPadding: CGFloat = 8
-        return max(88, panelHeight - fixedContentHeight - bottomPadding)
+        let fixedContentHeight: CGFloat = 552
+        let bottomPadding: CGFloat = 4
+        return max(52, panelHeight - fixedContentHeight - bottomPadding)
     }
 
     private func settingsSection<Content: View>(title: String, index: Int, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.title3.bold())
+                .font(.headline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 content()
             }
             .settingsSolidCard(accentColor: model.accentColor)
@@ -2603,21 +2602,16 @@ struct SettingsPanel: View {
         }
     }
 
-    private var databaseSizeRow: some View {
-        SettingsRow(title: model.t("数据库大小")) {
-            HStack(spacing: 12) {
+    private var databaseSummaryRow: some View {
+        SettingsRow(title: model.t("数据库")) {
+            HStack(spacing: 16) {
                 Text(model.databaseSizeText)
                     .monospacedDigit()
                 Text("\(model.t("记录数")) \(model.databaseRecordCountText)")
                     .foregroundStyle(.secondary)
+                Text("\(model.t("保留策略")) \(model.retentionPolicyText)")
+                    .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    private var retentionPolicyRow: some View {
-        SettingsRow(title: model.t("保留策略")) {
-            Text(model.retentionPolicyText)
-                .foregroundStyle(.secondary)
         }
     }
 

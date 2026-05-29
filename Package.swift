@@ -16,6 +16,11 @@ let package = Package(
             linkerSettings: [
                 .linkedLibrary("sqlite3")
             ]
+        ),
+        .testTarget(
+            name: "LatencyGraphForClashXMetaTests",
+            dependencies: ["LatencyGraphForClashXMeta"],
+            path: "Tests/LatencyGraphForClashXMetaTests"
         )
     ]
 )

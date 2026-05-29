@@ -48,6 +48,51 @@ struct ProbeBatchResult: Sendable {
     let errorDescription: String?
 }
 
+enum ProbeRecordCSVFormatter {
+    private static let formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static func csv(records: [ProbeRecord]) -> String {
+        let header = ["timestamp", "proxy_name", "target", "latency_ms", "success", "error_description"]
+        let rows = records.map { record in
+            [
+                formatter.string(from: record.timestamp),
+                record.proxyName,
+                record.target,
+                record.latencyMs.map(String.init) ?? "",
+                record.success ? "true" : "false",
+                record.errorDescription ?? ""
+            ]
+            .map(escape)
+            .joined(separator: ",")
+        }
+        return ([header.joined(separator: ",")] + rows).joined(separator: "\n") + "\n"
+    }
+
+    static func escape(_ value: String) -> String {
+        let needsQuotes = value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")
+        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+        return needsQuotes ? "\"\(escaped)\"" : escaped
+    }
+}
+
+enum ByteSizeFormatter {
+    static func string(from bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+enum ProbeHistoryManager {
+    static func clearing(records: [ProbeRecord], proxyName: String) -> [ProbeRecord] {
+        let trimmed = proxyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return records }
+        return records.filter { $0.proxyName != trimmed }
+    }
+}
+
 struct DelaySampleResult: Sendable {
     let latencyMs: Int?
     let errorDescription: String?
@@ -177,7 +222,11 @@ enum L10n {
         "已取消": "已取消", "检查更新": "檢查更新", "发现新版本 %@": "發現新版本 %@", "已经是最新版本": "已經是最新版本",
         "检查更新失败": "檢查更新失敗", "打开下载页": "打開下載頁", "每日自动检查": "每日自動檢查",
         "Language": "語言", "动态效果": "動態效果", "增强": "增強", "减弱": "減弱", "无动画": "無動畫", "Controller URL": "控制器 URL", "Secret": "密鑰",
-        "连接与认证": "連線與認證", "监控节点": "監控節點", "探测参数": "探測參數"
+        "连接与认证": "連線與認證", "监控节点": "監控節點", "探测参数": "探測參數",
+        "测速中": "測速中", "已暂停：未测到": "已暫停：未測到", "天": "天", "已清空全部历史": "已清空全部歷史",
+        "没有可清理的历史": "沒有可清理的歷史", "历史已清理": "歷史已清理", "导出 CSV": "匯出 CSV",
+        "已导出": "已匯出", "导出失败": "匯出失敗", "数据库管理": "資料庫管理", "数据库大小": "資料庫大小",
+        "记录数": "記錄數", "保留策略": "保留策略", "历史管理": "歷史管理", "清理此节点": "清理此節點"
     ]
     private static let english: [String: String] = [
         "控制": "Control", "状态": "Status", "当前节点": "Current Node", "监控节点数": "Monitored Nodes", "监控状态": "Monitoring",
@@ -197,7 +246,11 @@ enum L10n {
         "已取消": "Cancelled", "检查更新": "Check for Updates", "发现新版本 %@": "New version available: %@", "已经是最新版本": "Already up to date",
         "检查更新失败": "Update check failed", "打开下载页": "Open Download Page", "每日自动检查": "Daily automatic check",
         "Language": "Language", "动态效果": "Motion", "增强": "Enhanced", "减弱": "Reduced", "无动画": "Off", "Controller URL": "Controller URL", "Secret": "Secret",
-        "连接与认证": "Connection & Auth", "监控节点": "Monitored Nodes", "探测参数": "Probe Settings"
+        "连接与认证": "Connection & Auth", "监控节点": "Monitored Nodes", "探测参数": "Probe Settings",
+        "测速中": "Testing", "已暂停：未测到": "Paused: no probes", "天": "days", "已清空全部历史": "All history cleared",
+        "没有可清理的历史": "No history to clear", "历史已清理": "History cleared", "导出 CSV": "Export CSV",
+        "已导出": "Exported", "导出失败": "Export failed", "数据库管理": "Database", "数据库大小": "Database Size",
+        "记录数": "Records", "保留策略": "Retention", "历史管理": "History", "清理此节点": "Clear Node"
     ]
 }
 
@@ -230,6 +283,11 @@ final class AppModel: ObservableObject {
     @Published var resolvedProxyName: String = "DIRECT"
     @Published var monitoredProxyNames: [String] = ["DIRECT"]
     @Published var isTesting = false
+    @Published private(set) var lastProbeStartedAt: Date?
+    @Published private(set) var lastProbeCompletedAt: Date?
+    @Published private(set) var lastProbeAttemptCount = 0
+    @Published private(set) var lastProbeSuccessCount = 0
+    @Published var databaseStatusMessage: String?
 
     private var monitoringTask: Task<Void, Never>?
     private let store = ProbeStore()
@@ -268,6 +326,34 @@ final class AppModel: ObservableObject {
 
     var locale: Locale {
         Locale(identifier: language.localeIdentifier)
+    }
+
+    var monitoringStatusText: String {
+        if isTesting {
+            return t("测速中")
+        }
+        if isRunning {
+            if lastProbeAttemptCount == 0, latestError?.isEmpty == false {
+                return t("已暂停：未测到")
+            }
+            if lastProbeAttemptCount > 0 {
+                return "\(t("运行中")) \(lastProbeSuccessCount)/\(lastProbeAttemptCount)"
+            }
+            return t("运行中")
+        }
+        return t("已停止")
+    }
+
+    var databaseSizeText: String {
+        ByteSizeFormatter.string(from: store.databaseSizeBytes())
+    }
+
+    var retentionPolicyText: String {
+        "\(runtimePlan.retentionDays) \(t("天"))"
+    }
+
+    var databaseRecordCountText: String {
+        "\(records.count)"
     }
 
     func t(_ key: String) -> String {
@@ -345,6 +431,39 @@ final class AppModel: ObservableObject {
         recordIndex.replace(with: records)
         invalidateRecordDerivedState()
         persistRecords(immediate: true)
+        databaseStatusMessage = t("已清空全部历史")
+    }
+
+    func clearHistory(for proxyName: String) {
+        let trimmed = proxyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let originalCount = records.count
+        let nextRecords = ProbeHistoryManager.clearing(records: records, proxyName: trimmed)
+        guard nextRecords.count != originalCount else {
+            databaseStatusMessage = "\(trimmed): \(t("没有可清理的历史"))"
+            return
+        }
+        records = nextRecords
+        recordIndex.replace(with: records)
+        invalidateRecordDerivedState()
+        persistRecords(immediate: true)
+        databaseStatusMessage = "\(trimmed): \(t("历史已清理"))"
+    }
+
+    func exportHistoryCSV() {
+        let panel = NSSavePanel()
+        panel.title = t("导出 CSV")
+        panel.nameFieldStringValue = "latency-history-\(Self.exportTimestamp()).csv"
+        panel.allowedFileTypes = ["csv"]
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try ProbeRecordCSVFormatter.csv(records: records).write(to: url, atomically: true, encoding: .utf8)
+            databaseStatusMessage = "\(t("已导出")) \(url.lastPathComponent)"
+        } catch {
+            databaseStatusMessage = "\(t("导出失败"))：\(error.localizedDescription)"
+        }
     }
 
     func setManualProxy(_ proxy: String, isSelected: Bool) {
@@ -406,11 +525,13 @@ final class AppModel: ObservableObject {
         isTesting = true
         defer { isTesting = false }
         let batchStartedAt = Date()
+        let wasMonitoring = isRunning
+        lastProbeStartedAt = batchStartedAt
 
         do {
             let data = try await client.fetchProxies(baseURLString: controllerURL, secret: controllerSecret)
             let response = try JSONDecoder().decode(ProxyGroupResponse.self, from: data)
-            let proxyNames = try resolveMonitoredProxyNames(from: response)
+            let proxyNames = try validateProbeTargets(try resolveMonitoredProxyNames(from: response), in: response)
 
             monitoredProxyNames = proxyNames
             if monitorAllProxiesInGroup {
@@ -422,6 +543,9 @@ final class AppModel: ObservableObject {
             }
 
             let batchResults = await runProbeBatch(proxyNames: proxyNames)
+            lastProbeAttemptCount = batchResults.count
+            lastProbeSuccessCount = batchResults.filter { $0.latencyMs != nil }.count
+            lastProbeCompletedAt = Date()
             let errors = batchResults.compactMap { result -> String? in
                 guard let errorDescription = result.errorDescription else {
                     return nil
@@ -443,6 +567,9 @@ final class AppModel: ObservableObject {
             latestError = errors.isEmpty ? nil : errors.joined(separator: "\n")
         } catch {
             let failedProxy = resolvedProxyName.isEmpty ? proxyName : resolvedProxyName
+            lastProbeAttemptCount = 0
+            lastProbeSuccessCount = 0
+            lastProbeCompletedAt = Date()
             let record = ProbeRecord(
                 timestamp: batchStartedAt,
                 proxyName: failedProxy,
@@ -453,6 +580,9 @@ final class AppModel: ObservableObject {
             )
             append([record])
             latestError = error.localizedDescription
+            if wasMonitoring {
+                stopMonitoringAfterProbeSetupFailure()
+            }
         }
     }
 
@@ -583,7 +713,7 @@ final class AppModel: ObservableObject {
     }
 
     private var currentAppVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.3"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0"
     }
 
     private func scheduleMonitoringLoop() {
@@ -593,6 +723,7 @@ final class AppModel: ObservableObject {
             while self.isRunning && !Task.isCancelled {
                 let startedAt = Date()
                 await self.runProbe()
+                guard self.isRunning && !Task.isCancelled else { break }
 
                 let interval = max(0.001, TimeInterval(self.probeIntervalMs) / 1000.0)
                 let elapsed = Date().timeIntervalSince(startedAt)
@@ -666,13 +797,19 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func stopMonitoringAfterProbeSetupFailure() {
+        isRunning = false
+        monitoringTask?.cancel()
+        monitoringTask = nil
+    }
+
     private func resolveProxyName(from response: ProxyGroupResponse) throws -> String {
         let group = proxyGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let node = response.proxies[group] else {
-            throw AppError.custom("未找到代理组 \(group)")
+            throw AppError.custom("代理组不存在：\(group)。请刷新代理列表或检查 Clash 配置。")
         }
         guard let now = node.now, !now.isEmpty else {
-            throw AppError.custom("代理组 \(group) 当前未选中任何节点")
+            throw AppError.custom("代理组 \(group) 当前未选中任何节点。")
         }
         return now
     }
@@ -680,10 +817,10 @@ final class AppModel: ObservableObject {
     private func resolveAllProxyNames(in response: ProxyGroupResponse) throws -> [String] {
         let group = proxyGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let node = response.proxies[group] else {
-            throw AppError.custom("未找到代理组 \(group)")
+            throw AppError.custom("代理组不存在：\(group)。请刷新代理列表或检查 Clash 配置。")
         }
         guard let all = node.all, !all.isEmpty else {
-            throw AppError.custom("代理组 \(group) 没有可监控的节点列表")
+            throw AppError.custom("代理组 \(group) 没有可监控的节点列表。")
         }
         return all
     }
@@ -703,6 +840,27 @@ final class AppModel: ObservableObject {
 
         let legacyManualProxy = proxyName.trimmingCharacters(in: .whitespacesAndNewlines)
         return [legacyManualProxy.isEmpty ? "DIRECT" : legacyManualProxy]
+    }
+
+    private func validateProbeTargets(_ proxyNames: [String], in response: ProxyGroupResponse) throws -> [String] {
+        let names = proxyNames
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !names.isEmpty else {
+            throw AppError.custom("没有可测速的节点。请刷新代理列表后重新选择。")
+        }
+
+        let missing = names.filter { response.proxies[$0] == nil }
+        guard missing.isEmpty else {
+            throw AppError.custom("节点已不存在：\(missing.joined(separator: ", "))。已停止监控，请刷新代理列表后重新选择。")
+        }
+        return names
+    }
+
+    private static func exportTimestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: Date())
     }
 }
 
@@ -730,7 +888,7 @@ struct ClashAPIClient {
 
     func fetchProxies(baseURLString: String, secret: String) async throws -> Data {
         let request = try makeRequest(baseURLString: baseURLString, path: "/proxies", secret: secret)
-        let (data, response) = try await Self.session.data(for: request)
+        let (data, response) = try await perform(request)
         try validate(response)
         return data
     }
@@ -760,10 +918,20 @@ struct ClashAPIClient {
             request.setValue("Bearer \(trimmedSecret)", forHTTPHeaderField: "Authorization")
         }
 
-        let (data, response) = try await Self.session.data(for: request)
+        let (data, response) = try await perform(request)
         try validate(response)
         let decoded = try JSONDecoder().decode(DelayResponse.self, from: data)
         return decoded.delay
+    }
+
+    private func perform(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await Self.session.data(for: request)
+        } catch let error as URLError {
+            throw AppError.custom(describe(error))
+        } catch {
+            throw error
+        }
     }
 
     private func makeRequest(baseURLString: String, path: String, secret: String) throws -> URLRequest {
@@ -786,7 +954,40 @@ struct ClashAPIClient {
             throw AppError.custom("无效响应")
         }
         guard (200 ..< 300).contains(http.statusCode) else {
-            throw AppError.custom("HTTP \(http.statusCode)")
+            throw AppError.custom(describeHTTPStatus(http.statusCode))
+        }
+    }
+
+    private func describeHTTPStatus(_ statusCode: Int) -> String {
+        switch statusCode {
+        case 401, 403:
+            return "Clash API 认证失败（HTTP \(statusCode)）。请检查 Secret。"
+        case 404:
+            return "Clash API 路径不存在（HTTP 404）。请检查 Controller URL 或 Clash 版本。"
+        case 408:
+            return "Clash API 请求超时（HTTP 408）。Clash 控制端没有及时响应。"
+        case 429:
+            return "Clash API 请求过多（HTTP 429）。请调大数据点间隔或降低节点数量。"
+        case 500 ... 599:
+            if statusCode == 504 {
+                return "Clash API 网关超时（HTTP 504）。本轮没有完成测速，已避免继续显示为正常运行。"
+            }
+            return "Clash API 服务端错误（HTTP \(statusCode)）。请检查 Clash 是否正常运行。"
+        default:
+            return "Clash API 返回 HTTP \(statusCode)。"
+        }
+    }
+
+    private func describe(_ error: URLError) -> String {
+        switch error.code {
+        case .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet:
+            return "无法连接 Clash API：\(error.localizedDescription)"
+        case .timedOut:
+            return "Clash API 请求超时：\(error.localizedDescription)"
+        case .badURL, .unsupportedURL:
+            return "Controller URL 无效：\(error.localizedDescription)"
+        default:
+            return "Clash API 请求失败：\(error.localizedDescription)"
         }
     }
 
@@ -887,6 +1088,16 @@ struct ProbeStore {
             try appendRecords(records, retentionDays: retentionDays, in: db)
         } catch {
             print("append error: \(error)")
+        }
+    }
+
+    func databaseSizeBytes() -> Int64 {
+        do {
+            let url = try databaseURL()
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            return (attributes[.size] as? NSNumber)?.int64Value ?? 0
+        } catch {
+            return 0
         }
     }
 
@@ -1338,7 +1549,7 @@ struct ModernContentView: View {
                         .monospacedDigit()
                 }
                 SidebarStatusRow(title: model.t("监控状态")) {
-                    Text(model.isRunning ? model.t("运行中") : model.t("已停止"))
+                    Text(model.monitoringStatusText)
                 }
                 if let error = model.latestError, !error.isEmpty {
                     Text(model.displayError(error))
@@ -1593,7 +1804,7 @@ struct NativeModernContentView: View {
                             .monospacedDigit()
                     }
                     LabeledContent(model.t("监控状态")) {
-                        Text(model.isRunning ? model.t("运行中") : model.t("已停止"))
+                        Text(model.monitoringStatusText)
                     }
                     if let error = model.latestError, !error.isEmpty {
                         Text(model.displayError(error))
@@ -1938,7 +2149,7 @@ struct NodePageView: View {
                     .font(.title3.bold())
                 Spacer()
                 Button(model.t("清空历史")) {
-                    model.clearHistory()
+                    model.clearHistory(for: proxyName)
                 }
                 .buttonStyle(.bordered)
             }
@@ -2150,6 +2361,7 @@ struct SettingsPanel: View {
     @ObservedObject var model: AppModel
     var availableHeight: CGFloat? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var selectedHistoryProxyName = ""
 
     private var settingsAnimation: Animation? {
         reduceMotion ? nil : MotionTokens.soft
@@ -2157,6 +2369,17 @@ struct SettingsPanel: View {
 
     private var manualProxyChoices: [String] {
         Array(Set(model.availableProxies + model.selectedManualProxyNames)).sorted()
+    }
+
+    private var historyProxyChoices: [String] {
+        uniqueChoices(model.monitoredProxyNames + model.selectedManualProxyNames + model.availableProxies)
+    }
+
+    private var activeHistoryProxyName: String {
+        if !selectedHistoryProxyName.isEmpty, historyProxyChoices.contains(selectedHistoryProxyName) {
+            return selectedHistoryProxyName
+        }
+        return historyProxyChoices.first ?? ""
     }
 
     private var controllerURLChoices: [String] {
@@ -2207,6 +2430,12 @@ struct SettingsPanel: View {
                 delayTimeoutRow
                 probeSampleCountRow
             }
+
+            settingsSection(title: model.t("数据库管理"), index: 3) {
+                databaseSizeRow
+                retentionPolicyRow
+                databaseActionsRow
+            }
         }
         .onChange(of: model.useSelectedProxyFromGroup) { _ in
             Task { await model.refreshProxyCatalog() }
@@ -2225,9 +2454,9 @@ struct SettingsPanel: View {
     }
 
     private func manualProxyListHeight(for panelHeight: CGFloat) -> CGFloat {
-        let fixedContentHeight: CGFloat = 492
+        let fixedContentHeight: CGFloat = 642
         let bottomPadding: CGFloat = 8
-        return max(120, panelHeight - fixedContentHeight - bottomPadding)
+        return max(88, panelHeight - fixedContentHeight - bottomPadding)
     }
 
     private func settingsSection<Content: View>(title: String, index: Int, @ViewBuilder content: () -> Content) -> some View {
@@ -2369,6 +2598,58 @@ struct SettingsPanel: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 Text(model.t("次，取最小值"))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var databaseSizeRow: some View {
+        SettingsRow(title: model.t("数据库大小")) {
+            HStack(spacing: 12) {
+                Text(model.databaseSizeText)
+                    .monospacedDigit()
+                Text("\(model.t("记录数")) \(model.databaseRecordCountText)")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var retentionPolicyRow: some View {
+        SettingsRow(title: model.t("保留策略")) {
+            Text(model.retentionPolicyText)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var databaseActionsRow: some View {
+        SettingsRow(title: model.t("历史管理")) {
+            HStack(spacing: 10) {
+                Picker(model.t("节点"), selection: Binding(
+                    get: { activeHistoryProxyName },
+                    set: { selectedHistoryProxyName = $0 }
+                )) {
+                    ForEach(historyProxyChoices, id: \.self) { proxy in
+                        Text(proxy).tag(proxy)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 220)
+                .disabled(historyProxyChoices.isEmpty)
+
+                Button(model.t("清理此节点")) {
+                    model.clearHistory(for: activeHistoryProxyName)
+                }
+                .disabled(activeHistoryProxyName.isEmpty)
+
+                Button(model.t("导出 CSV")) {
+                    model.exportHistoryCSV()
+                }
+                .disabled(model.records.isEmpty)
+            }
+            if let message = model.databaseStatusMessage, !message.isEmpty {
+                Text(message)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -3097,7 +3378,7 @@ struct MenuBarPanel: View {
                 }
 
             HStack {
-                Text(model.isRunning ? model.t("监控中") : model.t("已停止"))
+                Text(model.monitoringStatusText)
                 Spacer()
                 Text("\(model.monitoredProxyNames.count) \(model.t("节点")) · 4h \(model.t("趋势"))")
             }
@@ -3480,7 +3761,7 @@ struct LegacyContentView: View {
                 legacySidebarSection(model.t("状态")) {
                     LegacyStatusLine(title: model.t("当前节点"), value: model.resolvedProxyName)
                     LegacyStatusLine(title: model.t("监控节点数"), value: "\(model.monitoredProxyNames.count)")
-                    LegacyStatusLine(title: model.t("监控状态"), value: model.isRunning ? model.t("运行中") : model.t("已停止"))
+                    LegacyStatusLine(title: model.t("监控状态"), value: model.monitoringStatusText)
                 }
             }
             .padding(14)

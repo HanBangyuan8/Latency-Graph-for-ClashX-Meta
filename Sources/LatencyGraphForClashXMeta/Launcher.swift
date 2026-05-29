@@ -45,6 +45,20 @@ struct NativeLatencyGraphApp: App {
             NativeModernContentView()
                 .environmentObject(model)
         }
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Latency Graph for ClashX Meta") {
+                    AboutPanelPresenter.show()
+                }
+            }
+
+            CommandGroup(replacing: .appSettings) {
+                Button("Preferences...") {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
     }
 
     private var menuBarTitle: String {
@@ -53,5 +67,23 @@ struct NativeLatencyGraphApp: App {
             return "Latency Graph \(latency)ms"
         }
         return "Latency Graph --"
+    }
+}
+
+enum AboutPanelPresenter {
+    @MainActor
+    static func show() {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.6.0"
+        let build = info?["CFBundleVersion"] as? String ?? "16"
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [
+            .applicationName: "Latency Graph for ClashX Meta",
+            .applicationVersion: version,
+            .version: build,
+            .credits: NSAttributedString(
+                string: "Node latency monitoring for ClashX Meta.\nCSV export, SQLite retention, Charts rendering, and packaged DMG builds.",
+                attributes: [.font: NSFont.systemFont(ofSize: 12)]
+            )
+        ])
     }
 }

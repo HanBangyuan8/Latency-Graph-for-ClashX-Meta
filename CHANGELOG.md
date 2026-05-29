@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.0 - 2026-05-29
+
+Major release.
+
+- Improved stability handling for Clash API failures, HTTP 504, missing proxy groups, and disappeared nodes.
+- Prevented monitoring from staying visually "running" when no probe targets can actually be tested.
+- Added CSV export for probe history.
+- Added single-node history cleanup from node pages and Settings.
+- Added database size, record count, and retention policy visibility.
+- Added database management and CSV conversion tests.
+- Added About / Preferences menu support.
+- Added App icon packaging and DMG generation.
+
 ## v1.5.3 - 2026-05-25
 
 Patch release.

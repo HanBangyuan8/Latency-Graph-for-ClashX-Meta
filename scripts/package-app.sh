@@ -12,6 +12,7 @@ APP_DIR="$STAGE_DIR/$PRODUCT_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+ICON_SOURCE="$ROOT_DIR/Resources/AppIcon.icns"
 CLANG_CACHE_DIR="$STAGE_DIR/clang-module-cache"
 ARCH_FLAGS=()
 USE_ARCH_FLAGS=0
@@ -73,6 +74,9 @@ rm -rf "$STAGE_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BINARY_PATH" "$MACOS_DIR/$PRODUCT_NAME"
 chmod +x "$MACOS_DIR/$PRODUCT_NAME"
+if [[ -f "$ICON_SOURCE" ]]; then
+    cp "$ICON_SOURCE" "$RESOURCES_DIR/AppIcon.icns"
+fi
 clean_bundle_metadata
 assert_no_user_cache_payload
 
@@ -89,6 +93,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <string>$PRODUCT_NAME</string>
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_IDENTIFIER</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -98,9 +104,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.3</string>
+    <string>1.6.0</string>
     <key>CFBundleVersion</key>
-    <string>15</string>
+    <string>16</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>

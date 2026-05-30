@@ -6,6 +6,7 @@ let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let resources = root.appendingPathComponent("Resources", isDirectory: true)
 let iconset = resources.appendingPathComponent("AppIcon.iconset", isDirectory: true)
 let output = resources.appendingPathComponent("AppIcon.icns")
+let readmePreview = resources.appendingPathComponent("AppIcon.png")
 let fileManager = FileManager.default
 
 try fileManager.createDirectory(at: resources, withIntermediateDirectories: true)
@@ -95,6 +96,9 @@ for variant in variants {
 }
 
 try? fileManager.removeItem(at: output)
+try? fileManager.removeItem(at: readmePreview)
+try fileManager.copyItem(at: iconset.appendingPathComponent("icon_512x512.png"), to: readmePreview)
+
 let process = Process()
 process.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
 process.arguments = ["-c", "icns", iconset.path, "-o", output.path]

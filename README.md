@@ -9,6 +9,10 @@
 
 A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latency.
 
+<p align="center">
+  <img src="Resources/AppIcon.png" alt="Latency Graph for ClashX Meta app icon" width="128">
+</p>
+
 ## Features
 
 - Multi-node latency monitoring with per-node pages
@@ -94,4 +98,3 @@ MIT License. See [LICENSE](LICENSE).
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=HanBangyuan8/Latency-Graph-for-ClashX-Meta&type=date&legend=top-left" />
  </picture>
 </a>
-

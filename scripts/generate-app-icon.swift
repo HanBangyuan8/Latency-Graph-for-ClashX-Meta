@@ -28,12 +28,29 @@ let variants: [(Int, String)] = [
 
 func writeIcon(size: Int, name: String) throws {
     let rect = NSRect(x: 0, y: 0, width: size, height: size)
-    let image = NSImage(size: rect.size)
-    image.lockFocus()
+    guard let bitmap = NSBitmapImageRep(
+        bitmapDataPlanes: nil,
+        pixelsWide: size,
+        pixelsHigh: size,
+        bitsPerSample: 8,
+        samplesPerPixel: 4,
+        hasAlpha: true,
+        isPlanar: false,
+        colorSpaceName: .deviceRGB,
+        bytesPerRow: 0,
+        bitsPerPixel: 0
+    ) else {
+        throw NSError(domain: "AppIcon", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to allocate bitmap \(name)"])
+    }
 
-    let iconMargin = CGFloat(size) * 0.12
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+    NSGraphicsContext.current?.cgContext.clear(CGRect(x: 0, y: 0, width: size, height: size))
+
+    let iconMargin = CGFloat(size) * (96.0 / 1024.0)
     let corner = CGFloat(size) * 0.19
-    let body = NSBezierPath(roundedRect: rect.insetBy(dx: iconMargin, dy: iconMargin), xRadius: corner, yRadius: corner)
+    let bodyRect = rect.insetBy(dx: iconMargin, dy: iconMargin)
+    let body = NSBezierPath(roundedRect: bodyRect, xRadius: corner, yRadius: corner)
     NSGradient(colors: [
         NSColor(calibratedRed: 0.20, green: 0.46, blue: 0.95, alpha: 1),
         NSColor(calibratedRed: 0.58, green: 0.33, blue: 0.90, alpha: 1)
@@ -43,7 +60,7 @@ func writeIcon(size: Int, name: String) throws {
     body.lineWidth = max(1, CGFloat(size) * 0.012)
     body.stroke()
 
-    let graphRect = rect.insetBy(dx: CGFloat(size) * 0.29, dy: CGFloat(size) * 0.32)
+    let graphRect = bodyRect.insetBy(dx: CGFloat(size) * 0.18, dy: CGFloat(size) * 0.20)
     let baseline = graphRect.minY + graphRect.height * 0.42
     let path = NSBezierPath()
     path.move(to: NSPoint(x: graphRect.minX, y: baseline))
@@ -79,14 +96,10 @@ func writeIcon(size: Int, name: String) throws {
         NSBezierPath(ovalIn: NSRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)).fill()
     }
 
-    image.unlockFocus()
+    NSGraphicsContext.restoreGraphicsState()
 
-    guard
-        let tiff = image.tiffRepresentation,
-        let bitmap = NSBitmapImageRep(data: tiff),
-        let png = bitmap.representation(using: .png, properties: [:])
-    else {
-        throw NSError(domain: "AppIcon", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to render icon \(name)"])
+    guard let png = bitmap.representation(using: .png, properties: [:]) else {
+        throw NSError(domain: "AppIcon", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unable to render icon \(name)"])
     }
     try png.write(to: iconset.appendingPathComponent(name))
 }
@@ -97,7 +110,7 @@ for variant in variants {
 
 try? fileManager.removeItem(at: output)
 try? fileManager.removeItem(at: readmePreview)
-try fileManager.copyItem(at: iconset.appendingPathComponent("icon_512x512.png"), to: readmePreview)
+try fileManager.copyItem(at: iconset.appendingPathComponent("icon_512x512@2x.png"), to: readmePreview)
 
 let process = Process()
 process.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")

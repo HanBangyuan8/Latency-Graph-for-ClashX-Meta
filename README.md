@@ -24,9 +24,9 @@ A native macOS menu bar app for monitoring ClashX Meta / Clash Meta proxy latenc
 
 ## Screenshots
 
-<img src="screenshot1.png" alt="Overview" width="900">
+<img src="assets/screenshots/screenshot1.png" alt="Overview" width="900">
 
-<img src="screenshot2.png" alt="Node detail" width="900">
+<img src="assets/screenshots/screenshot2.png" alt="Node detail" width="900">
 
 ## Requirements
 

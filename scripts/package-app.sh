@@ -3,10 +3,10 @@ set -euo pipefail
 
 PRODUCT_NAME="Latency Graph for ClashX Meta"
 BUNDLE_IDENTIFIER="com.han.LatencyGraphForClashXMeta"
+VERSION="1.6.1"
 CONFIGURATION="${1:-release}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
-FINAL_APP_DIR="$DIST_DIR/$PRODUCT_NAME.app"
 STAGE_DIR="${TMPDIR:-/tmp}/latency-graph-package.$$"
 APP_DIR="$STAGE_DIR/$PRODUCT_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -70,6 +70,16 @@ if [[ ! -x "$BINARY_PATH" ]]; then
     exit 1
 fi
 
+ARCHS="$(lipo -archs "$BINARY_PATH")"
+if [[ "$ARCHS" == *"arm64"* && "$ARCHS" == *"x86_64"* ]]; then
+    ARCH_LABEL="universal"
+elif [[ "$ARCHS" == *"arm64"* ]]; then
+    ARCH_LABEL="arm64"
+else
+    ARCH_LABEL="x86_64"
+fi
+FINAL_APP_DIR="$DIST_DIR/Latency-Graph-for-ClashX-Meta-v${VERSION}-macOS-${ARCH_LABEL}.app"
+
 rm -rf "$STAGE_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BINARY_PATH" "$MACOS_DIR/$PRODUCT_NAME"
@@ -104,7 +114,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.6.1</string>
+    <string>$VERSION</string>
     <key>CFBundleVersion</key>
     <string>17</string>
     <key>LSMinimumSystemVersion</key>
